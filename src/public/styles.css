@@ -739,6 +739,13 @@ select:focus {
   align-items: end;
 }
 
+.metadata-copy {
+  max-width: 850px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .rule-form .rule-value {
   grid-column: span 3;
 }
@@ -1040,6 +1047,34 @@ select:focus {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+}
+
+.watch-later-panel > p {
+  max-width: 850px;
+}
+
+.watch-later-action {
+  margin-top: 18px;
+}
+
+.watch-later-destination {
+  justify-content: flex-start;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas);
+}
+
+.watch-later-destination p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-placeholder {
+  width: 54px;
+  height: 36px;
 }
 
 .tag-list,

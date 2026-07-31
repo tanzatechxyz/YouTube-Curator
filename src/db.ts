@@ -18,10 +18,10 @@ export function openDatabase(dataDirectory: string): AppDatabase {
 }
 
 function migrate(database: AppDatabase): void {
-  const currentVersion = database.pragma("user_version", {
+  let currentVersion = database.pragma("user_version", {
     simple: true,
   }) as number;
-  if (currentVersion > 2) {
+  if (currentVersion > 3) {
     throw new Error(
       `Database schema ${currentVersion} is newer than this application supports.`,
     );
@@ -63,15 +63,8 @@ function migrate(database: AppDatabase): void {
       name TEXT NOT NULL,
       priority INTEGER NOT NULL,
       action TEXT NOT NULL CHECK (action IN ('accept', 'reject')),
-      field TEXT NOT NULL CHECK (
-        field IN ('title', 'description', 'channel', 'duration')
-      ),
-      operator TEXT NOT NULL CHECK (
-        operator IN (
-          'contains', 'not_contains', 'equals', 'regex',
-          'less_than', 'at_most', 'at_least', 'greater_than'
-        )
-      ),
+      field TEXT NOT NULL,
+      operator TEXT NOT NULL,
       value TEXT NOT NULL,
       playlist_ids_json TEXT NOT NULL DEFAULT '[]',
       enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
@@ -91,6 +84,7 @@ function migrate(database: AppDatabase): void {
       duration_seconds INTEGER CHECK (
         duration_seconds IS NULL OR duration_seconds >= 0
       ),
+      metadata_json TEXT NOT NULL DEFAULT '{}',
       detected_at TEXT NOT NULL,
       filter_outcome TEXT NOT NULL CHECK (filter_outcome IN ('accept', 'reject')),
       decision TEXT NOT NULL CHECK (decision IN ('pending', 'accepted', 'rejected')),
@@ -125,7 +119,7 @@ function migrate(database: AppDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS job_runs_started_at_idx ON job_runs(started_at DESC);
   `);
-    database.pragma("user_version = 2");
+    database.pragma("user_version = 3");
     return;
   }
 
@@ -190,6 +184,42 @@ function migrate(database: AppDatabase): void {
         CREATE UNIQUE INDEX rules_priority_unique ON rules(priority);
       `);
       database.pragma("user_version = 2");
+    })();
+    currentVersion = 2;
+  }
+
+  if (currentVersion === 2) {
+    database.transaction(() => {
+      database.exec(`
+        ALTER TABLE videos ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';
+
+        CREATE TABLE rules_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          priority INTEGER NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('accept', 'reject')),
+          field TEXT NOT NULL,
+          operator TEXT NOT NULL,
+          value TEXT NOT NULL,
+          playlist_ids_json TEXT NOT NULL DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO rules_v3 (
+          id, name, priority, action, field, operator, value,
+          playlist_ids_json, enabled, created_at, updated_at
+        )
+        SELECT id, name, priority, action, field, operator, value,
+               playlist_ids_json, enabled, created_at, updated_at
+        FROM rules;
+
+        DROP TABLE rules;
+        ALTER TABLE rules_v3 RENAME TO rules;
+        CREATE UNIQUE INDEX rules_priority_unique ON rules(priority);
+      `);
+      database.pragma("user_version = 3");
     })();
   }
 }

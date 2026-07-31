@@ -21,6 +21,32 @@
   </div>
 <% } %>
 
+<section class="panel watch-later-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Watch later</p>
+      <h2>Private Curator substitute</h2>
+    </div>
+    <% if (curatorWatchLater) { %><span class="status-pill good">Ready</span><% } %>
+  </div>
+  <p>YouTube does not let third-party apps read or modify the built-in Watch Later playlist. Curator can create a normal private playlist that rules can target instead. It will appear as <strong>Watch Later (Curator)</strong>.</p>
+  <p class="muted-copy"><a class="text-link" href="https://developers.google.com/youtube/v3/revision_history" target="_blank" rel="noreferrer">Why the standard playlist is unavailable ↗</a></p>
+  <% if (curatorWatchLater) { %>
+    <div class="destination-summary watch-later-destination">
+      <span class="playlist-placeholder compact-placeholder" aria-hidden="true">▶</span>
+      <div>
+        <strong><%= curatorWatchLater.title %></strong>
+        <p>Private playlist synced and available in rule destinations.</p>
+      </div>
+    </div>
+  <% } else { %>
+    <form method="post" action="/playlists/create-watch-later" class="watch-later-action">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="button secondary" type="submit" <%= accountConnected ? "" : "disabled" %>>Create private substitute</button>
+    </form>
+  <% } %>
+</section>
+
 <form method="post" action="/playlists/settings">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <section class="panel">

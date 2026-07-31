@@ -34,68 +34,12 @@
       <p class="eyebrow">New filter</p>
       <h2>Add a rule</h2>
     </div>
+    <span class="environment"><%= ruleFieldGroups.reduce((total, group) => total + group.fields.length, 0) %> fields</span>
   </div>
-  <form method="post" action="/rules" class="rule-form">
+  <p class="metadata-copy">Choose from YouTube identity, publishing, content, engagement, visibility, topic, recording, and live-stream metadata. Counts and other changing values are snapshots taken when a video is discovered.</p>
+  <form method="post" action="/rules" class="rule-form" data-rule-builder>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>
-      Name
-      <input name="name" maxlength="80" placeholder="Keep weekly highlights" required>
-    </label>
-    <label>
-      Action
-      <select name="action">
-        <option value="accept">Add to playlist(s)</option>
-        <option value="reject">Reject</option>
-      </select>
-    </label>
-    <label>
-      Field
-      <select name="field">
-        <option value="channel">Channel name</option>
-        <option value="duration">Duration (minutes)</option>
-        <option value="title">Title</option>
-        <option value="description">Description</option>
-      </select>
-    </label>
-    <label>
-      Comparison
-      <select name="operator">
-        <optgroup label="Text and channel">
-          <option value="contains">contains</option>
-          <option value="not_contains">does not contain</option>
-          <option value="equals" selected>equals / is exactly</option>
-          <option value="regex">matches regex</option>
-        </optgroup>
-        <optgroup label="Duration">
-          <option value="less_than">is shorter than</option>
-          <option value="at_most">is at most</option>
-          <option value="at_least">is at least</option>
-          <option value="greater_than">is longer than</option>
-        </optgroup>
-      </select>
-    </label>
-    <label class="rule-value">
-      Match value
-      <input name="value" maxlength="500" list="channel-suggestions" placeholder="Channel name, text, or minutes" required>
-      <small>For duration, enter minutes such as 10 or 12.5.</small>
-    </label>
-    <fieldset class="rule-destinations">
-      <legend>Destination playlists</legend>
-      <% if (playlists.length) { %>
-        <div class="rule-playlist-options">
-          <% playlists.forEach((playlist) => { %>
-            <label>
-              <input name="playlistIds" type="checkbox" value="<%= playlist.id %>">
-              <span><%= playlist.title %></span>
-            </label>
-          <% }) %>
-        </div>
-        <small>Required when the action is “Add to playlist(s)”; ignored for reject rules.</small>
-      <% } else { %>
-        <p class="muted-copy">Sync your playlists before creating an accepting rule. <a class="text-link" href="/playlists">Open playlists →</a></p>
-      <% } %>
-    </fieldset>
-    <button class="button primary" type="submit">Add rule</button>
+    <%- include("partials/rule-builder", { rule: ruleDraft, submitLabel: "Add rule" }) %>
   </form>
   <datalist id="channel-suggestions">
     <% subscriptions.forEach((subscription) => { %>
@@ -113,8 +57,6 @@
     <span class="environment"><%= rules.length %> total</span>
   </div>
   <% if (rules.length) { %>
-    <% const fieldLabels = { title: "title", description: "description", channel: "channel name", duration: "duration" }; %>
-    <% const operatorLabels = { contains: "contains", not_contains: "does not contain", equals: "equals", regex: "matches regex", less_than: "is shorter than", at_most: "is at most", at_least: "is at least", greater_than: "is longer than" }; %>
     <ol class="rule-list">
       <% rules.forEach((rule, index) => { %>
         <li class="<%= rule.enabled ? '' : 'disabled-row' %>">
@@ -126,9 +68,11 @@
               <% if (!rule.enabled) { %><span class="status-pill muted">Disabled</span><% } %>
             </div>
             <p>
-              <strong><%= fieldLabels[rule.field] || rule.field %></strong>
-              <%= operatorLabels[rule.operator] || rule.operator %>
-              <code><%= rule.value %><%= rule.field === "duration" ? " minutes" : "" %></code>
+              <strong><%= rule.fieldLabel %></strong>
+              <%= rule.operatorLabel %>
+              <% if (rule.operatorNeedsValue) { %>
+                <code><%= rule.displayValue %><%= rule.unit ? ` ${rule.unit}` : "" %></code>
+              <% } %>
             </p>
             <% if (rule.action === "accept") { %>
               <div class="rule-targets">
@@ -172,4 +116,5 @@
     </div>
   <% } %>
 </section>
+<script src="/assets/rules.js" defer></script>
 <%- include("partials/footer") %>

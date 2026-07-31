@@ -1,0 +1,99 @@
+<%
+  const allRuleFields = ruleFieldGroups.flatMap((group) => group.fields);
+  const selectedField = allRuleFields.find((field) => field.key === rule.field) || allRuleFields[0];
+  const selectedOperators = selectedField ? selectedField.operators : [];
+  const emptyComparison = rule.operator === "is_empty" || rule.operator === "is_not_empty";
+  const selectedChoices = selectedField && selectedField.choices ? selectedField.choices : [];
+  const useChoiceControl = selectedChoices.length > 0 && !emptyComparison;
+  const useInputControl = selectedChoices.length === 0 && !emptyComparison;
+%>
+<label>
+  Name
+  <input name="name" maxlength="80" value="<%= rule.name %>" placeholder="Keep weekly highlights" required>
+</label>
+<label>
+  Action
+  <select name="action" data-rule-action>
+    <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Add to playlist(s)</option>
+    <option value="reject" <%= rule.action === "reject" ? "selected" : "" %>>Reject</option>
+  </select>
+</label>
+<label>
+  Video field
+  <select name="field" data-rule-field>
+    <% ruleFieldGroups.forEach((group) => { %>
+      <optgroup label="<%= group.label %>">
+        <% group.fields.forEach((field) => { %>
+          <option
+            value="<%= field.key %>"
+            data-kind="<%= field.kind %>"
+            data-help="<%= field.help %>"
+            data-placeholder="<%= field.placeholder || '' %>"
+            data-unit="<%= field.unit || '' %>"
+            data-min="<%= field.min === undefined ? '' : field.min %>"
+            data-max="<%= field.max === undefined ? '' : field.max %>"
+            data-operators="<%= field.operators.join(',') %>"
+            data-choices="<%= JSON.stringify(field.choices || []) %>"
+            <%= field.key === rule.field ? "selected" : "" %>
+          ><%= field.label %></option>
+        <% }) %>
+      </optgroup>
+    <% }) %>
+  </select>
+</label>
+<label>
+  Comparison
+  <select name="operator" data-rule-operator>
+    <% ruleOperators.forEach((operator) => { %>
+      <% const available = selectedOperators.includes(operator.key); %>
+      <option
+        value="<%= operator.key %>"
+        <%= operator.key === rule.operator ? "selected" : "" %>
+        <%= available ? "" : "disabled hidden" %>
+      ><%= operator.label %></option>
+    <% }) %>
+  </select>
+</label>
+<label class="rule-value">
+  Match value
+  <input
+    data-rule-value-input
+    <% if (useInputControl) { %>name="value"<% } else { %>disabled hidden<% } %>
+    type="<%= selectedField && selectedField.kind === 'number' ? 'number' : selectedField && selectedField.kind === 'date' ? 'date' : 'text' %>"
+    step="<%= selectedField && selectedField.kind === 'number' ? 'any' : '' %>"
+    min="<%= selectedField && selectedField.min !== undefined ? selectedField.min : '' %>"
+    max="<%= selectedField && selectedField.max !== undefined ? selectedField.max : '' %>"
+    maxlength="500"
+    value="<%= rule.value %>"
+    placeholder="<%= selectedField ? selectedField.placeholder || '' : '' %>"
+    <%= selectedField && selectedField.key === 'channel' ? 'list="channel-suggestions"' : '' %>
+    <%= useInputControl ? "required" : "" %>
+  >
+  <select
+    data-rule-value-select
+    <% if (useChoiceControl) { %>name="value"<% } else { %>disabled hidden<% } %>
+    <%= useChoiceControl ? "required" : "" %>
+  >
+    <% selectedChoices.forEach((choice) => { %>
+      <option value="<%= choice.value %>" <%= choice.value === rule.value ? "selected" : "" %>><%= choice.label %></option>
+    <% }) %>
+  </select>
+  <small data-rule-help><%= emptyComparison ? "No comparison value is needed for this operator." : selectedField ? selectedField.help : "" %></small>
+</label>
+<fieldset class="rule-destinations" data-rule-destinations <%= rule.action === "reject" ? "hidden" : "" %>>
+  <legend>Destination playlists</legend>
+  <% if (playlists.length) { %>
+    <div class="rule-playlist-options">
+      <% playlists.forEach((playlist) => { %>
+        <label>
+          <input name="playlistIds" type="checkbox" value="<%= playlist.id %>" <%= rule.playlistIds.has(playlist.id) ? "checked" : "" %>>
+          <span><%= playlist.title %></span>
+        </label>
+      <% }) %>
+    </div>
+    <small>Choose one or more playlists for an accepting rule.</small>
+  <% } else { %>
+    <p class="muted-copy">Sync or create a playlist before saving an accepting rule. <a class="text-link" href="/playlists">Open playlists →</a></p>
+  <% } %>
+</fieldset>
+<button class="button primary" type="submit"><%= submitLabel %></button>

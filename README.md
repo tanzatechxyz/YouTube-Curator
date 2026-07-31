@@ -12,7 +12,9 @@ configuration is performed in the browser.
 - Google OAuth connection for one YouTube account
 - Subscription and owned-playlist sync
 - Ordered, first-match routing/reject rules with per-rule playlists
-- Channel-name, title, description, regex, and duration filtering
+- Type-aware filtering across 50+ video metadata fields, including channel,
+  text, tags, duration, counts, captions, status, dates, topics, and live data
+- One-click private `Watch Later (Curator)` destination for automated routing
 - Automatic or manual-review processing
 - Idempotent video processing and playlist additions
 - Review queue and searchable processing history
@@ -98,6 +100,8 @@ Official references:
 - [Google OAuth for web-server applications](https://developers.google.com/identity/protocols/oauth2/web-server)
 - [YouTube subscriptions.list](https://developers.google.com/youtube/v3/docs/subscriptions/list)
 - [YouTube playlistItems.insert](https://developers.google.com/youtube/v3/docs/playlistItems/insert)
+- [YouTube video resources](https://developers.google.com/youtube/v3/docs/videos)
+- [YouTube API revision history and Watch Later restriction](https://developers.google.com/youtube/v3/revision_history)
 - [YouTube API quota costs](https://developers.google.com/youtube/v3/determine_quota_cost)
 
 ## First useful configuration
@@ -106,10 +110,14 @@ Official references:
 2. Open **Subscriptions** and sync. Pause any channels you do not want scanned.
 3. Open **Playlists**, sync, and select automatic or manual-review mode.
    Fallback playlists are only used when the default outcome accepts a video.
+   YouTube blocks API access to its built-in Watch Later playlist; use the
+   one-click private **Watch Later (Curator)** substitute if you want that
+   workflow.
 4. Open **Rules**. Rules are evaluated top to bottom; the first match wins.
    Each accepting rule chooses its own destination playlists. For example,
    route videos from one channel to a channel-specific playlist, or route
-   videos at least 20 minutes long to a long-form playlist.
+   videos at least 20 minutes long to a long-form playlist. The field selector
+   is grouped by metadata type and shows only valid comparisons and values.
 5. Use **Run scan now** from the dashboard.
 
 The first scan of a channel uses the configurable lookback window (24 hours by
@@ -121,11 +129,11 @@ safe.
 
 The default one-hour interval is deliberately conservative. Each enabled
 channel normally costs one `playlistItems.list` request per scan. The app uses
-one additional `videos.list` request per 50 newly discovered videos to read
-durations. Each successful playlist insertion costs substantially more quota
-than a read. Accounts with many subscriptions or several destination playlists
-may need a longer interval. Current quota usage is visible in Google Cloud
-Console.
+one additional `videos.list` request per 50 newly discovered videos to read a
+metadata snapshot. Each successful playlist insertion costs substantially more
+quota than a read. Accounts with many subscriptions or several destination
+playlists may need a longer interval. Current quota usage is visible in Google
+Cloud Console.
 
 The worker stops paging a single channel after 500 unseen uploads and records a
 clear error instead of consuming unbounded quota.
@@ -174,7 +182,7 @@ docker compose up -d
 
 The workflow in `.github/workflows/container.yml` runs the tests and type
 checks, builds the production Docker target, and publishes the image to GitHub
-Container Registry. It runs on pushes to `main`, version tags such as `v1.1.0`,
+Container Registry. It runs on pushes to `main`, version tags such as `v1.2.0`,
 and manual dispatches. Pull requests perform the same verification and image
 build without publishing.
 

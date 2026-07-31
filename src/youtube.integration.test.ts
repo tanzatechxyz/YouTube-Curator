@@ -10,6 +10,7 @@ import {
 import { loadOrCreateMasterKey, SecretBox } from "./security.js";
 import {
   connectYouTubeAccount,
+  createCuratorWatchLaterPlaylist,
   createGoogleWorkerYouTube,
   readPlaylistCatalog,
   saveOAuthSettings,
@@ -137,6 +138,42 @@ describe("mocked Google and YouTube integration", () => {
     });
 
     nock("https://youtube.googleapis.com")
+      .get("/youtube/v3/playlists")
+      .query(true)
+      .reply(200, {
+        items: [
+          {
+            id: "destination-playlist",
+            snippet: { title: "Curated", thumbnails: {} },
+            status: { privacyStatus: "private" },
+          },
+        ],
+      });
+    nock("https://youtube.googleapis.com")
+      .post(
+        "/youtube/v3/playlists",
+        (body) =>
+          body?.snippet?.title === "Watch Later (Curator)" &&
+          body?.status?.privacyStatus === "private",
+      )
+      .query(true)
+      .reply(200, {
+        id: "curator-watch-later",
+        snippet: { title: "Watch Later (Curator)", thumbnails: {} },
+        status: { privacyStatus: "private" },
+      });
+    expect(
+      await createCuratorWatchLaterPlaylist(database, secretBox),
+    ).toMatchObject({
+      created: true,
+      playlist: { id: "curator-watch-later", privacyStatus: "private" },
+    });
+    expect(readPlaylistCatalog(database).map((playlist) => playlist.id)).toEqual([
+      "destination-playlist",
+      "curator-watch-later",
+    ]);
+
+    nock("https://youtube.googleapis.com")
       .get("/youtube/v3/playlistItems")
       .query(true)
       .reply(200, {
@@ -158,15 +195,64 @@ describe("mocked Google and YouTube integration", () => {
     nock("https://youtube.googleapis.com")
       .get("/youtube/v3/videos")
       .query(
-        (query) =>
-          query.part === "contentDetails" &&
-          query.id === "new-video",
+        (query) => {
+          const parts = new Set(String(query.part).split(","));
+          return (
+            parts.has("snippet") &&
+            parts.has("contentDetails") &&
+            parts.has("statistics") &&
+            parts.has("status") &&
+            parts.has("topicDetails") &&
+            parts.has("recordingDetails") &&
+            parts.has("liveStreamingDetails") &&
+            query.id === "new-video"
+          );
+        },
       )
       .reply(200, {
         items: [
           {
             id: "new-video",
-            contentDetails: { duration: "PT12M34S" },
+            snippet: {
+              channelId: "subscribed-channel",
+              channelTitle: "Subscribed Channel",
+              title: "New upload (authoritative)",
+              description: "A detailed description",
+              publishedAt: "2026-07-31T02:00:00.000Z",
+              tags: ["engineering", "tutorial"],
+              categoryId: "27",
+              defaultAudioLanguage: "en-AU",
+              liveBroadcastContent: "none",
+              thumbnails: {
+                high: { url: "https://images.example/video.jpg" },
+              },
+            },
+            contentDetails: {
+              duration: "PT12M34S",
+              definition: "hd",
+              caption: "true",
+              licensedContent: true,
+              regionRestriction: { blocked: ["US"] },
+              contentRating: { acbRating: "acbM" },
+            },
+            statistics: {
+              viewCount: "12345",
+              likeCount: "900",
+              commentCount: "42",
+            },
+            status: {
+              privacyStatus: "public",
+              embeddable: true,
+              madeForKids: false,
+              containsSyntheticMedia: false,
+            },
+            topicDetails: {
+              topicCategories: ["https://en.wikipedia.org/wiki/Technology"],
+            },
+            recordingDetails: {
+              locationDescription: "Melbourne",
+              location: { latitude: -37.8136, longitude: 144.9631 },
+            },
           },
         ],
       });
@@ -199,7 +285,28 @@ describe("mocked Google and YouTube integration", () => {
     expect(videos[0]).toMatchObject({
       videoId: "new-video",
       channelTitle: "Subscribed Channel",
+      title: "New upload (authoritative)",
       durationSeconds: 754,
+      metadata: {
+        tags: ["engineering", "tutorial"],
+        category_id: "27",
+        default_audio_language: "en-AU",
+        definition: "hd",
+        captions: true,
+        blocked_regions: ["US"],
+        content_rating: ["acbRating=acbM"],
+        view_count: 12345,
+        like_count: 900,
+        comment_count: 42,
+        privacy_status: "public",
+        embeddable: true,
+        made_for_kids: false,
+        contains_synthetic_media: false,
+        topic_categories: ["https://en.wikipedia.org/wiki/Technology"],
+        recording_location: "Melbourne",
+        location_latitude: -37.8136,
+        location_longitude: 144.9631,
+      },
     });
     await youtube.addVideoToPlaylist("new-video", "destination-playlist");
     nock("https://youtube.googleapis.com")

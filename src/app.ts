@@ -20,12 +20,25 @@ import {
 } from "./security.js";
 import { SessionManager, type OwnerSession } from "./session.js";
 import {
+  getRuleField,
+  getRuleOperator,
+  operatorNeedsValue,
+  operatorsForKind,
+  RULE_FIELD_GROUPS,
+  RULE_FIELDS,
+  RULE_OPERATORS,
+  type RuleField,
+  type RuleOperator,
+} from "./rule-fields.js";
+import {
   type VideoWorker,
   type WorkerScheduler,
 } from "./worker.js";
 import {
   connectYouTubeAccount,
+  createCuratorWatchLaterPlaylist,
   createOAuthClient,
+  CURATOR_WATCH_LATER_TITLE,
   getOAuthSettings,
   getStoredAccount,
   readPlaylistCatalog,
@@ -89,6 +102,21 @@ function parseStringArray(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+const RULE_FIELD_VIEW_GROUPS = RULE_FIELD_GROUPS.map((label) => ({
+  label,
+  fields: RULE_FIELDS.filter((field) => field.group === label).map((field) => ({
+    ...field,
+    operators: [...operatorsForKind(field.kind)],
+  })),
+}));
+
+function displayRuleValue(fieldName: string, value: string): string {
+  const field = getRuleField(fieldName);
+  return (
+    field?.choices?.find((choice) => choice.value === value)?.label ?? value
+  );
 }
 
 function formatDuration(value: unknown): string | undefined {
@@ -571,9 +599,17 @@ export function createApp(dependencies: AppDependencies): Express {
       }>
     ).map((rule) => {
       const playlistIds = parseStringArray(rule.playlist_ids_json);
+      const fieldName = String(rule.field);
+      const operatorName = String(rule.operator);
+      const field = getRuleField(fieldName);
       return {
         ...rule,
         playlistIds,
+        fieldLabel: field?.label ?? fieldName,
+        operatorLabel: getRuleOperator(operatorName)?.label ?? operatorName,
+        displayValue: displayRuleValue(fieldName, String(rule.value)),
+        unit: field?.unit,
+        operatorNeedsValue: operatorName !== "is_empty" && operatorName !== "is_not_empty",
         playlistTitles: playlistIds.map(
           (id) => playlistTitles.get(id) ?? `Missing playlist (${id})`,
         ),
@@ -590,19 +626,18 @@ export function createApp(dependencies: AppDependencies): Express {
         )
         .all(),
       defaultOutcome: getSetting(database, "default_outcome") ?? "reject",
+      ruleFieldGroups: RULE_FIELD_VIEW_GROUPS,
+      ruleOperators: RULE_OPERATORS,
+      ruleDraft: {
+        name: "",
+        action: "accept",
+        field: "channel",
+        operator: "equals",
+        value: "",
+        playlistIds: new Set<string>(),
+      },
     });
   });
-
-  type RuleField = "title" | "description" | "channel" | "duration";
-  type RuleOperator =
-    | "contains"
-    | "not_contains"
-    | "equals"
-    | "regex"
-    | "less_than"
-    | "at_most"
-    | "at_least"
-    | "greater_than";
 
   const validateRule = (
     body: Record<string, unknown>,
@@ -627,35 +662,60 @@ export function createApp(dependencies: AppDependencies): Express {
     if (!["accept", "reject"].includes(action)) {
       return "Choose a valid rule action.";
     }
-    if (!["title", "description", "channel", "duration"].includes(field)) {
+    const fieldDefinition = getRuleField(field);
+    if (!fieldDefinition) {
       return "Choose a valid rule field.";
     }
-    if (!value || value.length > 500) {
+    const operatorDefinition = getRuleOperator(operator);
+    if (
+      !operatorDefinition ||
+      !operatorsForKind(fieldDefinition.kind).includes(
+        operatorDefinition.key,
+      )
+    ) {
+      return `Choose a valid comparison for ${fieldDefinition.label}.`;
+    }
+    const needsValue = operatorNeedsValue(operatorDefinition.key);
+    if ((needsValue && !value) || value.length > 500) {
       return "Enter a comparison value of 500 characters or fewer.";
     }
-    const textOperators = ["contains", "not_contains", "equals", "regex"];
-    const durationOperators = [
-      "less_than",
-      "at_most",
-      "equals",
-      "at_least",
-      "greater_than",
-    ];
-    const validOperators =
-      field === "duration" ? durationOperators : textOperators;
-    if (!validOperators.includes(operator)) {
-      return field === "duration"
-        ? "Choose a duration comparison."
-        : "Choose a text comparison.";
-    }
-    if (field === "duration") {
-      const minutes = Number(value);
-      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 10_080) {
-        return "Enter a duration from 0.01 to 10080 minutes.";
+    if (!needsValue) {
+      value = "";
+    } else if (fieldDefinition.kind === "number") {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) {
+        return `Enter a valid number for ${fieldDefinition.label}.`;
       }
-      value = String(minutes);
+      if (
+        fieldDefinition.min !== undefined &&
+        numericValue < fieldDefinition.min
+      ) {
+        return `${fieldDefinition.label} must be at least ${fieldDefinition.min}.`;
+      }
+      if (
+        fieldDefinition.max !== undefined &&
+        numericValue > fieldDefinition.max
+      ) {
+        return `${fieldDefinition.label} must be at most ${fieldDefinition.max}.`;
+      }
+      value = String(numericValue);
+    } else if (fieldDefinition.kind === "date") {
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      const parsed = Date.parse(`${value}T00:00:00.000Z`);
+      if (
+        !datePattern.test(value) ||
+        !Number.isFinite(parsed) ||
+        new Date(parsed).toISOString().slice(0, 10) !== value
+      ) {
+        return `Enter a valid UTC date for ${fieldDefinition.label}.`;
+      }
+    } else if (
+      fieldDefinition.choices &&
+      !fieldDefinition.choices.some((choice) => choice.value === value)
+    ) {
+      return `Choose a valid value for ${fieldDefinition.label}.`;
     }
-    if (operator === "regex") {
+    if (operatorDefinition.key === "regex") {
       try {
         new RegExp(value, "i");
       } catch {
@@ -677,7 +737,7 @@ export function createApp(dependencies: AppDependencies): Express {
       name,
       action: action as "accept" | "reject",
       field: field as RuleField,
-      operator: operator as RuleOperator,
+      operator: operatorDefinition.key as RuleOperator,
       value,
       playlistIds: action === "accept" ? playlistIds : [],
     };
@@ -742,9 +802,11 @@ export function createApp(dependencies: AppDependencies): Express {
       subscriptions: database
         .prepare(
           `SELECT title FROM subscriptions
-           WHERE active = 1 ORDER BY title COLLATE NOCASE`,
+         WHERE active = 1 ORDER BY title COLLATE NOCASE`,
         )
         .all(),
+      ruleFieldGroups: RULE_FIELD_VIEW_GROUPS,
+      ruleOperators: RULE_OPERATORS,
     });
   });
 
@@ -881,6 +943,9 @@ export function createApp(dependencies: AppDependencies): Express {
       selectedIds: new Set(selectedIds),
       processingMode: getSetting(database, "processing_mode") ?? "review",
       accountConnected: Boolean(getStoredAccount(database)),
+      curatorWatchLater: catalog.find(
+        (playlist) => playlist.title === CURATOR_WATCH_LATER_TITLE,
+      ),
     });
   });
 
@@ -899,6 +964,39 @@ export function createApp(dependencies: AppDependencies): Express {
         "/playlists",
         "error",
         error instanceof Error ? error.message : "Playlist sync failed",
+      );
+    }
+  });
+
+  app.post("/playlists/create-watch-later", async (_request, response) => {
+    if (!getStoredAccount(database)) {
+      redirectWith(
+        response,
+        "/playlists",
+        "error",
+        "Connect a YouTube account before creating a playlist.",
+      );
+      return;
+    }
+    try {
+      const result = await createCuratorWatchLaterPlaylist(
+        database,
+        secretBox,
+      );
+      redirectWith(
+        response,
+        "/playlists",
+        "notice",
+        result.created
+          ? `Created private playlist “${result.playlist.title}”`
+          : `“${result.playlist.title}” already exists and is ready to use`,
+      );
+    } catch (error) {
+      redirectWith(
+        response,
+        "/playlists",
+        "error",
+        error instanceof Error ? error.message : "Playlist creation failed",
       );
     }
   });

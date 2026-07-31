@@ -69,7 +69,7 @@ describe("database migrations", () => {
       rmSync(directory, { recursive: true, force: true });
     });
 
-    expect(migrated.pragma("user_version", { simple: true })).toBe(2);
+    expect(migrated.pragma("user_version", { simple: true })).toBe(3);
     expect(
       migrated
         .prepare(
@@ -91,6 +91,17 @@ describe("database migrations", () => {
             `SELECT COUNT(*) AS count
              FROM pragma_table_info('videos')
              WHERE name = 'duration_seconds'`,
+          )
+          .get() as { count: number }
+      ).count,
+    ).toBe(1);
+    expect(
+      (
+        migrated
+          .prepare(
+            `SELECT COUNT(*) AS count
+             FROM pragma_table_info('videos')
+             WHERE name = 'metadata_json'`,
           )
           .get() as { count: number }
       ).count,

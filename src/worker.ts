@@ -277,9 +277,9 @@ export class VideoWorker {
         .prepare(
           `INSERT OR IGNORE INTO videos (
              video_id, channel_id, channel_title, title, description,
-             published_at, thumbnail_url, duration_seconds, detected_at, filter_outcome,
-             decision, decision_reason, decided_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             published_at, thumbnail_url, duration_seconds, metadata_json,
+             detected_at, filter_outcome, decision, decision_reason, decided_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           video.videoId,
@@ -290,6 +290,7 @@ export class VideoWorker {
           video.publishedAt,
           video.thumbnailUrl ?? null,
           video.durationSeconds ?? null,
+          JSON.stringify(video.metadata ?? {}),
           detectedAt,
           filter.outcome,
           decision,

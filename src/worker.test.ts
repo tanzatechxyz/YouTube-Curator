@@ -191,6 +191,93 @@ describe("rule evaluation", () => {
       playlistIds: ["playlist-four"],
     });
   });
+
+  it("compares numeric, list, boolean, date, and unavailable metadata", () => {
+    const video = candidate("video-metadata", "Metadata-rich upload");
+    video.metadata = {
+      view_count: 25_000,
+      tags: ["Engineering", "Tutorial"],
+      captions: true,
+      recording_date: "2026-07-30T22:00:00.000Z",
+    };
+    const base = {
+      id: 10,
+      name: "Metadata rule",
+      action: "accept" as const,
+      playlistIds: ["playlist-one"],
+    };
+
+    expect(
+      evaluateRules(
+        [
+          {
+            ...base,
+            field: "view_count",
+            operator: "at_least",
+            value: "10000",
+          },
+        ],
+        "reject",
+        video,
+      ).outcome,
+    ).toBe("accept");
+    expect(
+      evaluateRules(
+        [
+          {
+            ...base,
+            field: "tags",
+            operator: "equals",
+            value: "tutorial",
+          },
+        ],
+        "reject",
+        video,
+      ).outcome,
+    ).toBe("accept");
+    expect(
+      evaluateRules(
+        [
+          {
+            ...base,
+            field: "captions",
+            operator: "equals",
+            value: "true",
+          },
+        ],
+        "reject",
+        video,
+      ).outcome,
+    ).toBe("accept");
+    expect(
+      evaluateRules(
+        [
+          {
+            ...base,
+            field: "recording_date",
+            operator: "on_or_before",
+            value: "2026-07-30",
+          },
+        ],
+        "reject",
+        video,
+      ).outcome,
+    ).toBe("accept");
+    expect(
+      evaluateRules(
+        [
+          {
+            ...base,
+            field: "paid_product_placement",
+            operator: "is_empty",
+            value: "",
+          },
+        ],
+        "reject",
+        video,
+      ).outcome,
+    ).toBe("accept");
+  });
 });
 
 describe("video worker", () => {

@@ -21,7 +21,7 @@ or second worker service.
 | `youtube_account` | Singleton connected channel identity and encrypted access/refresh tokens |
 | `subscriptions` | Channel ID, uploads-playlist ID, enabled/current flags, last published-video watermark |
 | `rules` | Ordered action, field, operator, value, per-rule playlist IDs, and enabled state |
-| `videos` | Unique YouTube video ID, metadata including duration, filter outcome, final decision, reason, timestamps |
+| `videos` | Unique YouTube video ID, core display fields, duration, normalized metadata JSON snapshot, filter outcome, final decision, reason, timestamps |
 | `playlist_additions` | Unique `(video_id, playlist_id)`, pending/added/failed status and error |
 | `job_runs` | Worker start/finish, success/failure, counters, and error summary |
 
@@ -35,7 +35,8 @@ including after crashes or retries.
 1. Refresh subscriptions and the owned-playlist catalog.
 2. Read enabled subscription upload playlists.
 3. Fetch uploads newer than the saved watermark, with a five-minute overlap.
-4. Batch-fetch durations for newly discovered video IDs.
+4. Batch-fetch public/filterable metadata for newly discovered video IDs and
+   normalize scalar/list values into one snapshot.
 5. Insert each unseen video once.
 6. Evaluate enabled rules in priority order; the first match wins and supplies
    that video’s playlist targets.
@@ -60,8 +61,8 @@ preserved.
 | Dashboard and run-now status | `/` |
 | Google OAuth and connected channel | `/account` |
 | Subscription sync and enablement | `/subscriptions` |
-| Ordered filter rules | `/rules` |
-| Playlist targets and processing mode | `/playlists` |
+| Type-aware, ordered metadata filter rules | `/rules` |
+| Playlist targets, Watch Later substitute, and processing mode | `/playlists` |
 | Manual review queue | `/review` |
 | Searchable processing/addition history | `/history` |
 | Worker schedule, password, runs, and errors | `/settings` |

@@ -1,10 +1,14 @@
-import { google } from "googleapis";
+import { google, type youtube_v3 } from "googleapis";
 import {
   getSetting,
   setSetting,
   type AppDatabase,
 } from "./db.js";
-import type { VideoCandidate } from "./filter.js";
+import type {
+  VideoCandidate,
+  VideoMetadata,
+  VideoMetadataValue,
+} from "./filter.js";
 import type { SecretBox } from "./security.js";
 
 type OAuth2Client = InstanceType<typeof google.auth.OAuth2>;
@@ -44,6 +48,8 @@ export interface SubscriptionCatalogItem {
   uploadsPlaylistId: string;
   thumbnailUrl?: string;
 }
+
+export const CURATOR_WATCH_LATER_TITLE = "Watch Later (Curator)";
 
 interface StoredAccountRow {
   google_subject: string;
@@ -299,6 +305,253 @@ export function parseYouTubeDuration(value: string): number | undefined {
   return Number.isFinite(total) ? Math.round(total) : undefined;
 }
 
+function numberValue(value: string | null | undefined): number | undefined {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function booleanValue(value: string | null | undefined): boolean | undefined {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return undefined;
+}
+
+function putMetadata(
+  metadata: VideoMetadata,
+  key: string,
+  value: VideoMetadataValue | undefined,
+): void {
+  if (value !== undefined && value !== null) {
+    metadata[key] = value;
+  }
+}
+
+function flattenContentRating(
+  value: youtube_v3.Schema$ContentRating | undefined,
+): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const flattened: string[] = [];
+  for (const [key, entry] of Object.entries(
+    value as Record<string, unknown>,
+  )) {
+    if (Array.isArray(entry)) {
+      for (const item of entry) {
+        flattened.push(`${key}=${String(item)}`);
+      }
+    } else if (
+      typeof entry === "string" ||
+      typeof entry === "number" ||
+      typeof entry === "boolean"
+    ) {
+      flattened.push(`${key}=${String(entry)}`);
+    }
+  }
+  return flattened.length ? flattened : undefined;
+}
+
+function applyVideoResource(
+  video: VideoCandidate,
+  resource: youtube_v3.Schema$Video,
+): void {
+  const snippet = resource.snippet;
+  const content = resource.contentDetails;
+  const status = resource.status;
+  const statistics = resource.statistics;
+  const topics = resource.topicDetails;
+  const recording = resource.recordingDetails;
+  const live = resource.liveStreamingDetails;
+
+  video.channelId = snippet?.channelId ?? video.channelId;
+  video.channelTitle = snippet?.channelTitle ?? video.channelTitle;
+  video.title = snippet?.title ?? video.title;
+  video.description = snippet?.description ?? video.description;
+  video.publishedAt = snippet?.publishedAt ?? video.publishedAt;
+  video.thumbnailUrl =
+    snippet?.thumbnails?.high?.url ??
+    snippet?.thumbnails?.medium?.url ??
+    snippet?.thumbnails?.default?.url ??
+    video.thumbnailUrl;
+  video.durationSeconds = content?.duration
+    ? parseYouTubeDuration(content.duration)
+    : video.durationSeconds;
+
+  const metadata: VideoMetadata = {};
+  putMetadata(metadata, "tags", snippet?.tags ?? undefined);
+  putMetadata(metadata, "category_id", snippet?.categoryId ?? undefined);
+  putMetadata(metadata, "default_language", snippet?.defaultLanguage ?? undefined);
+  putMetadata(
+    metadata,
+    "default_audio_language",
+    snippet?.defaultAudioLanguage ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "live_status",
+    snippet?.liveBroadcastContent ?? undefined,
+  );
+
+  putMetadata(metadata, "definition", content?.definition ?? undefined);
+  putMetadata(metadata, "dimension", content?.dimension ?? undefined);
+  putMetadata(metadata, "captions", booleanValue(content?.caption));
+  putMetadata(
+    metadata,
+    "licensed_content",
+    content?.licensedContent ?? undefined,
+  );
+  putMetadata(metadata, "projection", content?.projection ?? undefined);
+  putMetadata(
+    metadata,
+    "allowed_regions",
+    content?.regionRestriction?.allowed ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "blocked_regions",
+    content?.regionRestriction?.blocked ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "country_access_allowed",
+    content?.countryRestriction?.allowed ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "country_access_exceptions",
+    content?.countryRestriction?.exception ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "content_rating",
+    flattenContentRating(content?.contentRating),
+  );
+  putMetadata(
+    metadata,
+    "has_custom_thumbnail",
+    content?.hasCustomThumbnail ?? undefined,
+  );
+
+  putMetadata(metadata, "view_count", numberValue(statistics?.viewCount));
+  putMetadata(metadata, "like_count", numberValue(statistics?.likeCount));
+  putMetadata(
+    metadata,
+    "dislike_count",
+    numberValue(statistics?.dislikeCount),
+  );
+  putMetadata(
+    metadata,
+    "favorite_count",
+    numberValue(statistics?.favoriteCount),
+  );
+  putMetadata(
+    metadata,
+    "comment_count",
+    numberValue(statistics?.commentCount),
+  );
+
+  putMetadata(metadata, "upload_status", status?.uploadStatus ?? undefined);
+  putMetadata(metadata, "privacy_status", status?.privacyStatus ?? undefined);
+  putMetadata(metadata, "license", status?.license ?? undefined);
+  putMetadata(metadata, "embeddable", status?.embeddable ?? undefined);
+  putMetadata(
+    metadata,
+    "public_stats_viewable",
+    status?.publicStatsViewable ?? undefined,
+  );
+  putMetadata(metadata, "made_for_kids", status?.madeForKids ?? undefined);
+  putMetadata(
+    metadata,
+    "self_declared_made_for_kids",
+    status?.selfDeclaredMadeForKids ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "contains_synthetic_media",
+    status?.containsSyntheticMedia ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "scheduled_publish_at",
+    status?.publishAt ?? undefined,
+  );
+  putMetadata(metadata, "failure_reason", status?.failureReason ?? undefined);
+  putMetadata(metadata, "rejection_reason", status?.rejectionReason ?? undefined);
+  putMetadata(
+    metadata,
+    "paid_product_placement",
+    resource.paidProductPlacementDetails?.hasPaidProductPlacement ?? undefined,
+  );
+
+  putMetadata(metadata, "topic_ids", topics?.topicIds ?? undefined);
+  putMetadata(
+    metadata,
+    "relevant_topic_ids",
+    topics?.relevantTopicIds ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "topic_categories",
+    topics?.topicCategories ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "recording_date",
+    recording?.recordingDate ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "recording_location",
+    recording?.locationDescription ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "location_latitude",
+    recording?.location?.latitude ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "location_longitude",
+    recording?.location?.longitude ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "location_altitude",
+    recording?.location?.altitude ?? undefined,
+  );
+
+  putMetadata(
+    metadata,
+    "scheduled_start_at",
+    live?.scheduledStartTime ?? undefined,
+  );
+  putMetadata(
+    metadata,
+    "scheduled_end_at",
+    live?.scheduledEndTime ?? undefined,
+  );
+  putMetadata(metadata, "actual_start_at", live?.actualStartTime ?? undefined);
+  putMetadata(metadata, "actual_end_at", live?.actualEndTime ?? undefined);
+  putMetadata(
+    metadata,
+    "concurrent_viewers",
+    numberValue(live?.concurrentViewers),
+  );
+  putMetadata(
+    metadata,
+    "active_live_chat_id",
+    live?.activeLiveChatId ?? undefined,
+  );
+  video.metadata = metadata;
+}
+
 export function saveSubscriptions(
   database: AppDatabase,
   subscriptions: SubscriptionCatalogItem[],
@@ -507,6 +760,55 @@ export async function syncPlaylistCatalog(
   return { synced: playlists.length };
 }
 
+export async function createCuratorWatchLaterPlaylist(
+  database: AppDatabase,
+  secretBox: SecretBox,
+): Promise<{ created: boolean; playlist: PlaylistCatalogItem }> {
+  await syncPlaylistCatalog(database, secretBox);
+  const catalog = readPlaylistCatalog(database);
+  const existing = catalog.find(
+    (playlist) => playlist.title === CURATOR_WATCH_LATER_TITLE,
+  );
+  if (existing) {
+    return { created: false, playlist: existing };
+  }
+
+  const client = createAuthorizedClient(database, secretBox);
+  const youtube = google.youtube({ version: "v3", auth: client });
+  const response = await youtube.playlists.insert({
+    part: ["snippet", "status"],
+    requestBody: {
+      snippet: {
+        title: CURATOR_WATCH_LATER_TITLE,
+        description:
+          "Private playlist created for automated routing by YouTube Curator. " +
+          "YouTube does not expose its built-in Watch Later playlist to third-party apps.",
+      },
+      status: { privacyStatus: "private" },
+    },
+  });
+  const item = response.data;
+  if (!item.id) {
+    throw new Error("YouTube created no usable playlist ID. Try again.");
+  }
+  const playlist: PlaylistCatalogItem = {
+    id: item.id,
+    title: item.snippet?.title ?? CURATOR_WATCH_LATER_TITLE,
+    privacyStatus: item.status?.privacyStatus ?? "private",
+    thumbnailUrl:
+      item.snippet?.thumbnails?.medium?.url ??
+      item.snippet?.thumbnails?.default?.url ??
+      undefined,
+  };
+  savePlaylistCatalog(
+    database,
+    [...catalog, playlist].sort((left, right) =>
+      left.title.localeCompare(right.title),
+    ),
+  );
+  return { created: true, playlist };
+}
+
 export interface WorkerYouTube {
   syncSubscriptions(): Promise<{ synced: number; skipped: number }>;
   syncPlaylists(): Promise<{ synced: number }>;
@@ -587,27 +889,36 @@ function createVideoGateway(
         }
       } while (pageToken && !reachedWatermark);
 
-      const durations = new Map<string, number>();
+      const resources = new Map<string, youtube_v3.Schema$Video>();
       for (const batch of chunks(
         videos.map((video) => video.videoId),
         50,
       )) {
         const response = await youtube.videos.list({
-          part: ["contentDetails"],
+          part: [
+            "snippet",
+            "contentDetails",
+            "statistics",
+            "status",
+            "topicDetails",
+            "recordingDetails",
+            "liveStreamingDetails",
+            "paidProductPlacementDetails",
+          ],
           id: batch,
           maxResults: 50,
         });
         for (const item of response.data.items ?? []) {
-          const duration = item.contentDetails?.duration
-            ? parseYouTubeDuration(item.contentDetails.duration)
-            : undefined;
-          if (item.id && duration !== undefined) {
-            durations.set(item.id, duration);
+          if (item.id) {
+            resources.set(item.id, item);
           }
         }
       }
       for (const video of videos) {
-        video.durationSeconds = durations.get(video.videoId);
+        const resource = resources.get(video.videoId);
+        if (resource) {
+          applyVideoResource(video, resource);
+        }
       }
       return videos.sort(
         (left, right) =>

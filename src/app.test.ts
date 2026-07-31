@@ -169,6 +169,9 @@ describe("first-run application", () => {
     const rulesPage = await agent.get("/rules");
     const csrf = rulesPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
     expect(csrf).toBeTruthy();
+    expect(rulesPage.text).toContain("View count");
+    expect(rulesPage.text).toContain("Contains altered or synthetic media");
+    expect(rulesPage.text).toContain("Scheduled live start date (UTC)");
 
     const invalid = await agent.post("/rules").type("form").send({
       _csrf: csrf,
@@ -221,10 +224,57 @@ describe("first-run application", () => {
     });
     const durationEditPage = await agent.get("/rules/2/edit");
     expect(durationEditPage.status).toBe(200);
-    expect(durationEditPage.text).toContain('value="duration" selected');
+    expect(durationEditPage.text).toMatch(/value="duration"[\s\S]*?selected/);
     expect(durationEditPage.text).toContain(
       'value="PL-highlights" checked',
     );
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Invalid count rule",
+      action: "accept",
+      field: "view_count",
+      operator: "contains",
+      value: "1000",
+      playlistIds: "PL-highlights",
+    });
+    expect(
+      (database.prepare("SELECT COUNT(*) AS count FROM rules").get() as { count: number })
+        .count,
+    ).toBe(2);
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Popular videos",
+      action: "accept",
+      field: "view_count",
+      operator: "at_least",
+      value: "1000",
+      playlistIds: "PL-highlights",
+    });
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Unknown sponsorship",
+      action: "reject",
+      field: "paid_product_placement",
+      operator: "is_empty",
+    });
+    expect(
+      database
+        .prepare(
+          `SELECT field, operator, value FROM rules
+           WHERE name IN ('Popular videos', 'Unknown sponsorship')
+           ORDER BY priority`,
+        )
+        .all(),
+    ).toEqual([
+      { field: "view_count", operator: "at_least", value: "1000" },
+      {
+        field: "paid_product_placement",
+        operator: "is_empty",
+        value: "",
+      },
+    ]);
   });
 
   it("saves only playlist IDs present in the synced catalog", async () => {
@@ -242,6 +292,8 @@ describe("first-run application", () => {
     ]);
     const playlistsPage = await agent.get("/playlists");
     const csrf = playlistsPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
+    expect(playlistsPage.text).toContain("Watch Later (Curator)");
+    expect(playlistsPage.text).toContain("built-in Watch Later playlist");
 
     await agent.post("/playlists/settings").type("form").send({
       _csrf: csrf,
