@@ -48,7 +48,10 @@
               </h2>
               <span class="decision-badge <%= video.decision === 'accepted' ? 'accept' : video.decision === 'rejected' ? 'reject' : 'pending' %>"><%= video.decision %></span>
             </div>
-            <p class="video-channel"><%= video.channel_title %> · <%= video.published_at %></p>
+            <p class="video-channel">
+              <%= video.channel_title %> · <%= video.published_at %>
+              <% if (video.durationLabel) { %> · <%= video.durationLabel %><% } %>
+            </p>
             <p class="history-reason"><%= video.decision_reason %></p>
             <% if (video.additions.length) { %>
               <div class="addition-list">

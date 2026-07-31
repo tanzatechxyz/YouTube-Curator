@@ -9,6 +9,7 @@ import {
   type AppDatabase,
 } from "./db.js";
 import {
+  parseYouTubeDuration,
   readPlaylistCatalog,
   savePlaylistCatalog,
   saveSubscriptions,
@@ -31,6 +32,12 @@ afterEach(() => {
 });
 
 describe("YouTube catalog persistence", () => {
+  it("parses YouTube ISO-8601 durations into seconds", () => {
+    expect(parseYouTubeDuration("PT12M34S")).toBe(754);
+    expect(parseYouTubeDuration("PT1H2M3S")).toBe(3_723);
+    expect(parseYouTubeDuration("not-a-duration")).toBeUndefined();
+  });
+
   it("preserves channel enablement and marks missing subscriptions inactive", () => {
     const database = testDatabase();
     saveSubscriptions(database, [
@@ -86,6 +93,15 @@ describe("YouTube catalog persistence", () => {
       { id: "two", title: "Two", privacyStatus: "private" },
     ]);
     setSetting(database, "selected_playlists_json", JSON.stringify(["one", "two"]));
+    database
+      .prepare(
+        `INSERT INTO rules (
+           name, priority, action, field, operator, value, playlist_ids_json,
+           enabled, created_at, updated_at
+         ) VALUES ('Route videos', 10, 'accept', 'title', 'contains', 'video',
+                   '["one","two"]', 1, 'now', 'now')`,
+      )
+      .run();
     savePlaylistCatalog(database, [
       { id: "two", title: "Two renamed", privacyStatus: "unlisted" },
       { id: "three", title: "Three", privacyStatus: "public" },
@@ -95,5 +111,12 @@ describe("YouTube catalog persistence", () => {
     expect(JSON.parse(getSetting(database, "selected_playlists_json") ?? "[]")).toEqual([
       "two",
     ]);
+    expect(
+      (
+        database
+          .prepare("SELECT playlist_ids_json FROM rules")
+          .get() as { playlist_ids_json: string }
+      ).playlist_ids_json,
+    ).toBe('["two"]');
   });
 });

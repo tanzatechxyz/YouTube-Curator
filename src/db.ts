@@ -21,12 +21,13 @@ function migrate(database: AppDatabase): void {
   const currentVersion = database.pragma("user_version", {
     simple: true,
   }) as number;
-  if (currentVersion > 1) {
+  if (currentVersion > 2) {
     throw new Error(
       `Database schema ${currentVersion} is newer than this application supports.`,
     );
   }
-  database.exec(`
+  if (currentVersion === 0) {
+    database.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -62,11 +63,17 @@ function migrate(database: AppDatabase): void {
       name TEXT NOT NULL,
       priority INTEGER NOT NULL,
       action TEXT NOT NULL CHECK (action IN ('accept', 'reject')),
-      field TEXT NOT NULL CHECK (field IN ('title', 'description', 'channel')),
+      field TEXT NOT NULL CHECK (
+        field IN ('title', 'description', 'channel', 'duration')
+      ),
       operator TEXT NOT NULL CHECK (
-        operator IN ('contains', 'not_contains', 'equals', 'regex')
+        operator IN (
+          'contains', 'not_contains', 'equals', 'regex',
+          'less_than', 'at_most', 'at_least', 'greater_than'
+        )
       ),
       value TEXT NOT NULL,
+      playlist_ids_json TEXT NOT NULL DEFAULT '[]',
       enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -81,6 +88,9 @@ function migrate(database: AppDatabase): void {
       description TEXT NOT NULL DEFAULT '',
       published_at TEXT NOT NULL,
       thumbnail_url TEXT,
+      duration_seconds INTEGER CHECK (
+        duration_seconds IS NULL OR duration_seconds >= 0
+      ),
       detected_at TEXT NOT NULL,
       filter_outcome TEXT NOT NULL CHECK (filter_outcome IN ('accept', 'reject')),
       decision TEXT NOT NULL CHECK (decision IN ('pending', 'accepted', 'rejected')),
@@ -115,7 +125,73 @@ function migrate(database: AppDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS job_runs_started_at_idx ON job_runs(started_at DESC);
   `);
-  database.pragma("user_version = 1");
+    database.pragma("user_version = 2");
+    return;
+  }
+
+  if (currentVersion === 1) {
+    const selectedRow = database
+      .prepare("SELECT value FROM settings WHERE key = 'selected_playlists_json'")
+      .get() as { value: string } | undefined;
+    let migratedPlaylistIds = "[]";
+    try {
+      const parsed = JSON.parse(selectedRow?.value ?? "[]") as unknown;
+      if (Array.isArray(parsed)) {
+        migratedPlaylistIds = JSON.stringify(
+          parsed.filter((value): value is string => typeof value === "string"),
+        );
+      }
+    } catch {
+      migratedPlaylistIds = "[]";
+    }
+
+    database.transaction(() => {
+      database.exec(`
+        ALTER TABLE videos ADD COLUMN duration_seconds INTEGER CHECK (
+          duration_seconds IS NULL OR duration_seconds >= 0
+        );
+
+        CREATE TABLE rules_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          priority INTEGER NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('accept', 'reject')),
+          field TEXT NOT NULL CHECK (
+            field IN ('title', 'description', 'channel', 'duration')
+          ),
+          operator TEXT NOT NULL CHECK (
+            operator IN (
+              'contains', 'not_contains', 'equals', 'regex',
+              'less_than', 'at_most', 'at_least', 'greater_than'
+            )
+          ),
+          value TEXT NOT NULL,
+          playlist_ids_json TEXT NOT NULL DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      database
+        .prepare(
+          `INSERT INTO rules_v2 (
+             id, name, priority, action, field, operator, value,
+             playlist_ids_json, enabled, created_at, updated_at
+           )
+           SELECT id, name, priority, action, field, operator, value,
+                  CASE WHEN action = 'accept' THEN ? ELSE '[]' END,
+                  enabled, created_at, updated_at
+           FROM rules`,
+        )
+        .run(migratedPlaylistIds);
+      database.exec(`
+        DROP TABLE rules;
+        ALTER TABLE rules_v2 RENAME TO rules;
+        CREATE UNIQUE INDEX rules_priority_unique ON rules(priority);
+      `);
+      database.pragma("user_version = 2");
+    })();
+  }
 }
 
 function installDefaults(database: AppDatabase): void {

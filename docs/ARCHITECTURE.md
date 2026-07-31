@@ -17,11 +17,11 @@ or second worker service.
 
 | Table | Key fields and purpose |
 | --- | --- |
-| `settings` | Key/value application configuration, encrypted client secret, generated session secret, mode, selected playlist/catalog JSON |
+| `settings` | Key/value application configuration, encrypted client secret, generated session secret, mode, fallback playlist/catalog JSON |
 | `youtube_account` | Singleton connected channel identity and encrypted access/refresh tokens |
 | `subscriptions` | Channel ID, uploads-playlist ID, enabled/current flags, last published-video watermark |
-| `rules` | Ordered action, field, operator, value, and enabled state |
-| `videos` | Unique YouTube video ID, metadata, filter outcome, final decision, reason, timestamps |
+| `rules` | Ordered action, field, operator, value, per-rule playlist IDs, and enabled state |
+| `videos` | Unique YouTube video ID, metadata including duration, filter outcome, final decision, reason, timestamps |
 | `playlist_additions` | Unique `(video_id, playlist_id)`, pending/added/failed status and error |
 | `job_runs` | Worker start/finish, success/failure, counters, and error summary |
 
@@ -35,14 +35,17 @@ including after crashes or retries.
 1. Refresh subscriptions and the owned-playlist catalog.
 2. Read enabled subscription upload playlists.
 3. Fetch uploads newer than the saved watermark, with a five-minute overlap.
-4. Insert each unseen video once.
-5. Evaluate enabled rules in priority order; the first match wins.
-6. Reject immediately, queue for manual review, or accept automatically.
-7. Create one pending addition row for each selected playlist.
-8. Check the target playlist for the video, call `playlistItems.insert` only
+4. Batch-fetch durations for newly discovered video IDs.
+5. Insert each unseen video once.
+6. Evaluate enabled rules in priority order; the first match wins and supplies
+   that video’s playlist targets.
+7. Reject immediately, queue for manual review, or accept automatically.
+8. Create one pending addition row for each playlist on the matched rule so a
+   later manual review keeps the original routing decision.
+9. Check the target playlist for the video, call `playlistItems.insert` only
    when absent, and mark each row added or failed.
-9. Retry failed/pending rows on later runs or from the History screen.
-10. Save run counters and errors for the dashboard and Settings screen.
+10. Retry failed/pending rows on later runs or from the History screen.
+11. Save run counters and errors for the dashboard and Settings screen.
 
 The worker keeps scanning other channels after a channel-specific error. A run
 with any partial failure is shown as failed with the successful counters

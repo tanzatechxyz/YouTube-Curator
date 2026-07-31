@@ -743,6 +743,57 @@ select:focus {
   grid-column: span 3;
 }
 
+.rule-form label small,
+.rule-destinations > small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.rule-destinations {
+  min-width: 0;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.rule-destinations legend {
+  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.rule-playlist-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rule-playlist-options label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: var(--canvas);
+}
+
+.rule-playlist-options input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.rule-playlist-options span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inline-form {
   margin-top: 18px;
   align-items: end;
@@ -807,6 +858,20 @@ select:focus {
 .rule-copy code {
   color: var(--ink);
   font-size: 12px;
+}
+
+.rule-targets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.warning-copy {
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .decision-badge {
@@ -1273,6 +1338,10 @@ select:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .rule-playlist-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .review-card {
     grid-template-columns: 180px minmax(0, 1fr);
   }
@@ -1383,6 +1452,7 @@ select:focus {
 
   .choice-grid,
   .playlist-grid,
+  .rule-playlist-options,
   .rule-form {
     grid-template-columns: 1fr;
   }

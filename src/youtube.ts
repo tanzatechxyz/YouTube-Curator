@@ -283,6 +283,22 @@ function chunks<T>(values: T[], size: number): T[][] {
   return result;
 }
 
+export function parseYouTubeDuration(value: string): number | undefined {
+  const match =
+    /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
+      value,
+    );
+  if (!match) {
+    return undefined;
+  }
+  const days = Number.parseInt(match[1] ?? "0", 10);
+  const hours = Number.parseInt(match[2] ?? "0", 10);
+  const minutes = Number.parseInt(match[3] ?? "0", 10);
+  const seconds = Number.parseFloat(match[4] ?? "0");
+  const total = days * 86_400 + hours * 3_600 + minutes * 60 + seconds;
+  return Number.isFinite(total) ? Math.round(total) : undefined;
+}
+
 export function saveSubscriptions(
   database: AppDatabase,
   subscriptions: SubscriptionCatalogItem[],
@@ -423,9 +439,36 @@ export function savePlaylistCatalog(
   } catch {
     selected = [];
   }
+  const ruleTargets = (
+    database
+      .prepare("SELECT id, playlist_ids_json FROM rules")
+      .all() as Array<{ id: number; playlist_ids_json: string }>
+  ).map((rule) => {
+    let playlistIds: string[] = [];
+    try {
+      const parsed = JSON.parse(rule.playlist_ids_json) as unknown;
+      if (Array.isArray(parsed)) {
+        playlistIds = parsed.filter(
+          (value): value is string =>
+            typeof value === "string" && validIds.has(value),
+        );
+      }
+    } catch {
+      playlistIds = [];
+    }
+    return { id: rule.id, playlistIds };
+  });
   database.transaction(() => {
     setSetting(database, "playlist_catalog_json", JSON.stringify(playlists));
     setSetting(database, "selected_playlists_json", JSON.stringify(selected));
+    const updateRule = database.prepare(
+      `UPDATE rules SET playlist_ids_json = ?, updated_at = ?
+       WHERE id = ?`,
+    );
+    const updatedAt = new Date().toISOString();
+    for (const rule of ruleTargets) {
+      updateRule.run(JSON.stringify(rule.playlistIds), updatedAt, rule.id);
+    }
   })();
 }
 
@@ -543,6 +586,29 @@ function createVideoGateway(
           );
         }
       } while (pageToken && !reachedWatermark);
+
+      const durations = new Map<string, number>();
+      for (const batch of chunks(
+        videos.map((video) => video.videoId),
+        50,
+      )) {
+        const response = await youtube.videos.list({
+          part: ["contentDetails"],
+          id: batch,
+          maxResults: 50,
+        });
+        for (const item of response.data.items ?? []) {
+          const duration = item.contentDetails?.duration
+            ? parseYouTubeDuration(item.contentDetails.duration)
+            : undefined;
+          if (item.id && duration !== undefined) {
+            durations.set(item.id, duration);
+          }
+        }
+      }
+      for (const video of videos) {
+        video.durationSeconds = durations.get(video.videoId);
+      }
       return videos.sort(
         (left, right) =>
           Date.parse(left.publishedAt) - Date.parse(right.publishedAt),

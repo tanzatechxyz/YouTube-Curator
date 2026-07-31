@@ -80,6 +80,30 @@ function textArray(value: unknown): string[] {
   return single ? [single] : [];
 }
 
+function parseStringArray(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatDuration(value: unknown): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  const totalSeconds = Math.round(value);
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function safeNext(value: unknown): string {
   const candidate = text(value);
   return candidate.startsWith("/") && !candidate.startsWith("//")
@@ -531,18 +555,54 @@ export function createApp(dependencies: AppDependencies): Express {
   });
 
   app.get("/rules", (_request, response) => {
-    const rules = database
+    const playlists = readPlaylistCatalog(database);
+    const playlistTitles = new Map(
+      playlists.map((playlist) => [playlist.id, playlist.title]),
+    );
+    const rules = (
+      database
       .prepare(
-        `SELECT id, name, priority, action, field, operator, value, enabled
+        `SELECT id, name, priority, action, field, operator, value,
+                playlist_ids_json, enabled
          FROM rules ORDER BY priority, id`,
       )
-      .all();
+        .all() as Array<Record<string, unknown> & {
+        playlist_ids_json: string;
+      }>
+    ).map((rule) => {
+      const playlistIds = parseStringArray(rule.playlist_ids_json);
+      return {
+        ...rule,
+        playlistIds,
+        playlistTitles: playlistIds.map(
+          (id) => playlistTitles.get(id) ?? `Missing playlist (${id})`,
+        ),
+      };
+    });
     response.render("rules", {
       title: "Rules",
       rules,
+      playlists,
+      subscriptions: database
+        .prepare(
+          `SELECT title FROM subscriptions
+           WHERE active = 1 ORDER BY title COLLATE NOCASE`,
+        )
+        .all(),
       defaultOutcome: getSetting(database, "default_outcome") ?? "reject",
     });
   });
+
+  type RuleField = "title" | "description" | "channel" | "duration";
+  type RuleOperator =
+    | "contains"
+    | "not_contains"
+    | "equals"
+    | "regex"
+    | "less_than"
+    | "at_most"
+    | "at_least"
+    | "greater_than";
 
   const validateRule = (
     body: Record<string, unknown>,
@@ -550,30 +610,50 @@ export function createApp(dependencies: AppDependencies): Express {
     | {
         name: string;
         action: "accept" | "reject";
-        field: "title" | "description" | "channel";
-        operator: "contains" | "not_contains" | "equals" | "regex";
+        field: RuleField;
+        operator: RuleOperator;
         value: string;
+        playlistIds: string[];
       }
     | string => {
     const name = text(body.name);
     const action = text(body.action);
     const field = text(body.field);
     const operator = text(body.operator);
-    const value = text(body.value);
+    let value = text(body.value);
     if (!name || name.length > 80) {
       return "Give the rule a name of 80 characters or fewer.";
     }
     if (!["accept", "reject"].includes(action)) {
       return "Choose a valid rule action.";
     }
-    if (!["title", "description", "channel"].includes(field)) {
+    if (!["title", "description", "channel", "duration"].includes(field)) {
       return "Choose a valid rule field.";
-    }
-    if (!["contains", "not_contains", "equals", "regex"].includes(operator)) {
-      return "Choose a valid rule operator.";
     }
     if (!value || value.length > 500) {
       return "Enter a comparison value of 500 characters or fewer.";
+    }
+    const textOperators = ["contains", "not_contains", "equals", "regex"];
+    const durationOperators = [
+      "less_than",
+      "at_most",
+      "equals",
+      "at_least",
+      "greater_than",
+    ];
+    const validOperators =
+      field === "duration" ? durationOperators : textOperators;
+    if (!validOperators.includes(operator)) {
+      return field === "duration"
+        ? "Choose a duration comparison."
+        : "Choose a text comparison.";
+    }
+    if (field === "duration") {
+      const minutes = Number(value);
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 10_080) {
+        return "Enter a duration from 0.01 to 10080 minutes.";
+      }
+      value = String(minutes);
     }
     if (operator === "regex") {
       try {
@@ -582,12 +662,24 @@ export function createApp(dependencies: AppDependencies): Express {
         return "Enter a valid regular expression.";
       }
     }
+    const validPlaylistIds = new Set(
+      readPlaylistCatalog(database).map((playlist) => playlist.id),
+    );
+    const playlistIds = [
+      ...new Set(
+        textArray(body.playlistIds).filter((id) => validPlaylistIds.has(id)),
+      ),
+    ];
+    if (action === "accept" && playlistIds.length === 0) {
+      return "Choose at least one destination playlist for an accepting rule.";
+    }
     return {
       name,
       action: action as "accept" | "reject",
-      field: field as "title" | "description" | "channel",
-      operator: operator as "contains" | "not_contains" | "equals" | "regex",
+      field: field as RuleField,
+      operator: operator as RuleOperator,
       value,
+      playlistIds: action === "accept" ? playlistIds : [],
     };
   };
 
@@ -604,9 +696,9 @@ export function createApp(dependencies: AppDependencies): Express {
     database
       .prepare(
         `INSERT INTO rules (
-           name, priority, action, field, operator, value, enabled,
-           created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+           name, priority, action, field, operator, value, playlist_ids_json,
+           enabled, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       )
       .run(
         input.name,
@@ -615,6 +707,7 @@ export function createApp(dependencies: AppDependencies): Express {
         input.field,
         input.operator,
         input.value,
+        JSON.stringify(input.playlistIds),
         now,
         now,
       );
@@ -624,10 +717,13 @@ export function createApp(dependencies: AppDependencies): Express {
   app.get("/rules/:id/edit", (request, response) => {
     const rule = database
       .prepare(
-        `SELECT id, name, action, field, operator, value, enabled
+        `SELECT id, name, action, field, operator, value, playlist_ids_json,
+                enabled
          FROM rules WHERE id = ?`,
       )
-      .get(Number.parseInt(text(request.params.id), 10));
+      .get(Number.parseInt(text(request.params.id), 10)) as
+      | (Record<string, unknown> & { playlist_ids_json: string })
+      | undefined;
     if (!rule) {
       response.status(404).render("error", {
         title: "Rule not found",
@@ -636,7 +732,20 @@ export function createApp(dependencies: AppDependencies): Express {
       });
       return;
     }
-    response.render("rule-edit", { title: "Edit rule", rule });
+    response.render("rule-edit", {
+      title: "Edit rule",
+      rule: {
+        ...rule,
+        playlistIds: new Set(parseStringArray(rule.playlist_ids_json)),
+      },
+      playlists: readPlaylistCatalog(database),
+      subscriptions: database
+        .prepare(
+          `SELECT title FROM subscriptions
+           WHERE active = 1 ORDER BY title COLLATE NOCASE`,
+        )
+        .all(),
+    });
   });
 
   app.post("/rules/:id", (request, response) => {
@@ -655,7 +764,7 @@ export function createApp(dependencies: AppDependencies): Express {
       .prepare(
         `UPDATE rules SET
            name = ?, action = ?, field = ?, operator = ?, value = ?,
-           updated_at = ?
+           playlist_ids_json = ?, updated_at = ?
          WHERE id = ?`,
       )
       .run(
@@ -664,6 +773,7 @@ export function createApp(dependencies: AppDependencies): Express {
         input.field,
         input.operator,
         input.value,
+        JSON.stringify(input.playlistIds),
         new Date().toISOString(),
         id,
       );
@@ -732,6 +842,20 @@ export function createApp(dependencies: AppDependencies): Express {
     const outcome = text(request.body.defaultOutcome);
     if (!["accept", "reject"].includes(outcome)) {
       redirectWith(response, "/rules", "error", "Choose a valid default outcome.");
+      return;
+    }
+    if (
+      outcome === "accept" &&
+      parseStringArray(
+        getSetting(database, "selected_playlists_json") ?? "[]",
+      ).length === 0
+    ) {
+      redirectWith(
+        response,
+        "/rules",
+        "error",
+        "Choose at least one fallback playlist before using default accept.",
+      );
       return;
     }
     setSetting(database, "default_outcome", outcome);
@@ -806,35 +930,29 @@ export function createApp(dependencies: AppDependencies): Express {
     const videos = database
       .prepare(
         `SELECT video_id, channel_title, title, description, published_at,
-                thumbnail_url, detected_at, decision_reason
+                thumbnail_url, duration_seconds, detected_at, decision_reason
          FROM videos
          WHERE decision = 'pending'
          ORDER BY published_at DESC, detected_at DESC
          LIMIT 100`,
       )
-      .all();
+      .all() as Array<Record<string, unknown> & {
+      video_id: string;
+      duration_seconds: number | null;
+    }>;
+    const destinations = database.prepare(
+      `SELECT playlist_title
+       FROM playlist_additions
+       WHERE video_id = ?
+       ORDER BY id`,
+    );
     response.render("review", {
       title: "Review queue",
-      videos,
-      selectedPlaylists: (() => {
-        let selectedIds: string[] = [];
-        try {
-          const parsed = JSON.parse(
-            getSetting(database, "selected_playlists_json") ?? "[]",
-          ) as unknown;
-          selectedIds = Array.isArray(parsed)
-            ? parsed.filter(
-                (value): value is string => typeof value === "string",
-              )
-            : [];
-        } catch {
-          selectedIds = [];
-        }
-        const selected = new Set(selectedIds);
-        return readPlaylistCatalog(database).filter((playlist) =>
-          selected.has(playlist.id),
-        );
-      })(),
+      videos: videos.map((video) => ({
+        ...video,
+        durationLabel: formatDuration(video.duration_seconds),
+        destinations: destinations.all(video.video_id),
+      })),
     });
   });
 
@@ -849,7 +967,7 @@ export function createApp(dependencies: AppDependencies): Express {
         ? `Approved; ${result.added} playlist additions succeeded and ${result.failed} failed`
         : result.added
           ? `Approved and added to ${result.added} playlist${result.added === 1 ? "" : "s"}`
-          : "Approved; no destination playlists were selected";
+          : "Approved; no destination playlists were recorded";
       redirectWith(
         response,
         "/review",
@@ -923,7 +1041,8 @@ export function createApp(dependencies: AppDependencies): Express {
     const videos = database
       .prepare(
         `SELECT video_id, channel_title, title, published_at, thumbnail_url,
-                detected_at, filter_outcome, decision, decision_reason
+                duration_seconds, detected_at, filter_outcome, decision,
+                decision_reason
          FROM videos
          ${where}
          ORDER BY detected_at DESC
@@ -941,6 +1060,7 @@ export function createApp(dependencies: AppDependencies): Express {
       query,
       videos: videos.map((video) => ({
         ...video,
+        durationLabel: formatDuration(video.duration_seconds),
         additions: additionsQuery.all(video.video_id),
       })),
     });

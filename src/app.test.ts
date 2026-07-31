@@ -163,6 +163,9 @@ describe("first-run application", () => {
       googleClientId: "",
       googleClientSecret: "",
     });
+    savePlaylistCatalog(database, [
+      { id: "PL-highlights", title: "Highlights", privacyStatus: "private" },
+    ]);
     const rulesPage = await agent.get("/rules");
     const csrf = rulesPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
     expect(csrf).toBeTruthy();
@@ -188,10 +191,40 @@ describe("first-run application", () => {
       field: "title",
       operator: "contains",
       value: "highlights",
+      playlistIds: "PL-highlights",
     });
     const updatedPage = await agent.get("/rules");
     expect(updatedPage.text).toContain("Keep highlights");
     expect(updatedPage.text).toContain("highlights");
+    expect(updatedPage.text).toContain("Highlights");
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Long videos",
+      action: "accept",
+      field: "duration",
+      operator: "at_least",
+      value: "20",
+      playlistIds: "PL-highlights",
+    });
+    const durationRule = database
+      .prepare(
+        `SELECT field, operator, value, playlist_ids_json
+         FROM rules WHERE name = 'Long videos'`,
+      )
+      .get();
+    expect(durationRule).toEqual({
+      field: "duration",
+      operator: "at_least",
+      value: "20",
+      playlist_ids_json: '["PL-highlights"]',
+    });
+    const durationEditPage = await agent.get("/rules/2/edit");
+    expect(durationEditPage.status).toBe(200);
+    expect(durationEditPage.text).toContain('value="duration" selected');
+    expect(durationEditPage.text).toContain(
+      'value="PL-highlights" checked',
+    );
   });
 
   it("saves only playlist IDs present in the synced catalog", async () => {
@@ -234,9 +267,9 @@ describe("first-run application", () => {
       .prepare(
         `INSERT INTO videos (
            video_id, channel_id, channel_title, title, description,
-           published_at, detected_at, filter_outcome, decision,
+           published_at, duration_seconds, detected_at, filter_outcome, decision,
            decision_reason
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'accept', 'pending', ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'accept', 'pending', ?)`,
       )
       .run(
         "review-video",
@@ -245,14 +278,24 @@ describe("first-run application", () => {
         "A useful upload",
         "Description",
         "2026-07-31T01:00:00.000Z",
+        754,
         "2026-07-31T02:00:00.000Z",
         "Rule “Useful”: title contains “useful”",
       );
+    database
+      .prepare(
+        `INSERT INTO playlist_additions (
+           video_id, playlist_id, playlist_title, status
+         ) VALUES ('review-video', 'playlist-two', 'Research', 'pending')`,
+      )
+      .run();
 
     const reviewPage = await agent.get("/review");
     expect(reviewPage.status).toBe(200);
     expect(reviewPage.text).toContain("A useful upload");
     expect(reviewPage.text).toContain("Why it matched");
+    expect(reviewPage.text).toContain("Research");
+    expect(reviewPage.text).toContain("12:34");
 
     const historyPage = await agent.get("/history");
     expect(historyPage.status).toBe(200);

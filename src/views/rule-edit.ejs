@@ -19,7 +19,7 @@
     <label>
       Action
       <select name="action">
-        <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Accept</option>
+        <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Add to playlist(s)</option>
         <option value="reject" <%= rule.action === "reject" ? "selected" : "" %>>Reject</option>
       </select>
     </label>
@@ -29,22 +29,53 @@
         <option value="title" <%= rule.field === "title" ? "selected" : "" %>>Title</option>
         <option value="description" <%= rule.field === "description" ? "selected" : "" %>>Description</option>
         <option value="channel" <%= rule.field === "channel" ? "selected" : "" %>>Channel name</option>
+        <option value="duration" <%= rule.field === "duration" ? "selected" : "" %>>Duration (minutes)</option>
       </select>
     </label>
     <label>
       Comparison
       <select name="operator">
-        <option value="contains" <%= rule.operator === "contains" ? "selected" : "" %>>contains</option>
-        <option value="not_contains" <%= rule.operator === "not_contains" ? "selected" : "" %>>does not contain</option>
-        <option value="equals" <%= rule.operator === "equals" ? "selected" : "" %>>equals</option>
-        <option value="regex" <%= rule.operator === "regex" ? "selected" : "" %>>matches regex</option>
+        <optgroup label="Text and channel">
+          <option value="contains" <%= rule.operator === "contains" ? "selected" : "" %>>contains</option>
+          <option value="not_contains" <%= rule.operator === "not_contains" ? "selected" : "" %>>does not contain</option>
+          <option value="equals" <%= rule.operator === "equals" ? "selected" : "" %>>equals / is exactly</option>
+          <option value="regex" <%= rule.operator === "regex" ? "selected" : "" %>>matches regex</option>
+        </optgroup>
+        <optgroup label="Duration">
+          <option value="less_than" <%= rule.operator === "less_than" ? "selected" : "" %>>is shorter than</option>
+          <option value="at_most" <%= rule.operator === "at_most" ? "selected" : "" %>>is at most</option>
+          <option value="at_least" <%= rule.operator === "at_least" ? "selected" : "" %>>is at least</option>
+          <option value="greater_than" <%= rule.operator === "greater_than" ? "selected" : "" %>>is longer than</option>
+        </optgroup>
       </select>
     </label>
     <label class="rule-value">
-      Value
-      <input name="value" maxlength="500" value="<%= rule.value %>" required>
+      Match value
+      <input name="value" maxlength="500" list="channel-suggestions" value="<%= rule.value %>" required>
+      <small>For duration, enter minutes such as 10 or 12.5.</small>
     </label>
+    <fieldset class="rule-destinations">
+      <legend>Destination playlists</legend>
+      <% if (playlists.length) { %>
+        <div class="rule-playlist-options">
+          <% playlists.forEach((playlist) => { %>
+            <label>
+              <input name="playlistIds" type="checkbox" value="<%= playlist.id %>" <%= rule.playlistIds.has(playlist.id) ? "checked" : "" %>>
+              <span><%= playlist.title %></span>
+            </label>
+          <% }) %>
+        </div>
+        <small>Required when the action is “Add to playlist(s)”; ignored for reject rules.</small>
+      <% } else { %>
+        <p class="muted-copy">Sync your playlists before saving an accepting rule. <a class="text-link" href="/playlists">Open playlists →</a></p>
+      <% } %>
+    </fieldset>
     <button class="button primary" type="submit">Save rule</button>
   </form>
+  <datalist id="channel-suggestions">
+    <% subscriptions.forEach((subscription) => { %>
+      <option value="<%= subscription.title %>"></option>
+    <% }) %>
+  </datalist>
 </section>
 <%- include("partials/footer") %>

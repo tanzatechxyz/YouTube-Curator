@@ -57,21 +57,27 @@ function errorMessage(error: unknown): string {
   return message.replace(/\s+/g, " ").trim().slice(0, 800);
 }
 
-function selectedPlaylists(database: AppDatabase): PlaylistCatalogItem[] {
-  let selectedIds: string[] = [];
+function selectedPlaylistIds(database: AppDatabase): string[] {
   try {
     const parsed = JSON.parse(
       getSetting(database, "selected_playlists_json") ?? "[]",
     ) as unknown;
     if (Array.isArray(parsed)) {
-      selectedIds = parsed.filter(
+      return parsed.filter(
         (value): value is string => typeof value === "string",
       );
     }
   } catch {
-    selectedIds = [];
+    return [];
   }
-  const selected = new Set(selectedIds);
+  return [];
+}
+
+function playlistsForIds(
+  database: AppDatabase,
+  playlistIds: string[],
+): PlaylistCatalogItem[] {
+  const selected = new Set(playlistIds);
   return readPlaylistCatalog(database).filter((playlist) =>
     selected.has(playlist.id),
   );
@@ -271,9 +277,9 @@ export class VideoWorker {
         .prepare(
           `INSERT OR IGNORE INTO videos (
              video_id, channel_id, channel_title, title, description,
-             published_at, thumbnail_url, detected_at, filter_outcome,
+             published_at, thumbnail_url, duration_seconds, detected_at, filter_outcome,
              decision, decision_reason, decided_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           video.videoId,
@@ -283,6 +289,7 @@ export class VideoWorker {
           video.description,
           video.publishedAt,
           video.thumbnailUrl ?? null,
+          video.durationSeconds ?? null,
           detectedAt,
           filter.outcome,
           decision,
@@ -292,22 +299,33 @@ export class VideoWorker {
       if (insert.changes === 0) {
         return false;
       }
-      if (decision === "accepted") {
-        this.ensureAdditionRows(video.videoId);
+      if (decision !== "rejected") {
+        this.ensureAdditionRows(video.videoId, filter.playlistIds);
       }
       return true;
     })();
     return result ? decision : "duplicate";
   }
 
-  private ensureAdditionRows(videoId: string): void {
+  private ensureAdditionRows(videoId: string, playlistIds: string[]): void {
     const insert = this.database.prepare(
       `INSERT OR IGNORE INTO playlist_additions (
          video_id, playlist_id, playlist_title, status
        ) VALUES (?, ?, ?, 'pending')`,
     );
-    for (const playlist of selectedPlaylists(this.database)) {
+    for (const playlist of playlistsForIds(this.database, playlistIds)) {
       insert.run(videoId, playlist.id, playlist.title);
+    }
+  }
+
+  private ensureLegacyFallbackRows(videoId: string): void {
+    const row = this.database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM playlist_additions WHERE video_id = ?",
+      )
+      .get(videoId) as { count: number };
+    if (row.count === 0) {
+      this.ensureAdditionRows(videoId, selectedPlaylistIds(this.database));
     }
   }
 
@@ -404,7 +422,7 @@ export class VideoWorker {
         )
         .run(this.now().toISOString(), videoId);
       if (result.changes) {
-        this.ensureAdditionRows(videoId);
+        this.ensureLegacyFallbackRows(videoId);
       }
       return result.changes;
     })();
@@ -436,7 +454,7 @@ export class VideoWorker {
     if (!video || video.decision !== "accepted") {
       throw new Error("Only accepted videos can be added to playlists.");
     }
-    this.ensureAdditionRows(videoId);
+    this.ensureLegacyFallbackRows(videoId);
     return this.attemptOutstandingAdditions(this.youtubeFactory(), videoId);
   }
 }

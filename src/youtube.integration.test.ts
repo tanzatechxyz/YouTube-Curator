@@ -156,6 +156,21 @@ describe("mocked Google and YouTube integration", () => {
         ],
       });
     nock("https://youtube.googleapis.com")
+      .get("/youtube/v3/videos")
+      .query(
+        (query) =>
+          query.part === "contentDetails" &&
+          query.id === "new-video",
+      )
+      .reply(200, {
+        items: [
+          {
+            id: "new-video",
+            contentDetails: { duration: "PT12M34S" },
+          },
+        ],
+      });
+    nock("https://youtube.googleapis.com")
       .get("/youtube/v3/playlistItems")
       .query(
         (query) =>
@@ -184,6 +199,7 @@ describe("mocked Google and YouTube integration", () => {
     expect(videos[0]).toMatchObject({
       videoId: "new-video",
       channelTitle: "Subscribed Channel",
+      durationSeconds: 754,
     });
     await youtube.addVideoToPlaylist("new-video", "destination-playlist");
     nock("https://youtube.googleapis.com")

@@ -11,7 +11,8 @@ configuration is performed in the browser.
 
 - Google OAuth connection for one YouTube account
 - Subscription and owned-playlist sync
-- Ordered, first-match accept/reject rules
+- Ordered, first-match routing/reject rules with per-rule playlists
+- Channel-name, title, description, regex, and duration filtering
 - Automatic or manual-review processing
 - Idempotent video processing and playlist additions
 - Review queue and searchable processing history
@@ -103,10 +104,12 @@ Official references:
 
 1. Connect YouTube.
 2. Open **Subscriptions** and sync. Pause any channels you do not want scanned.
-3. Open **Rules**. Rules are evaluated top to bottom; the first match wins.
-   The default is reject, so add at least one accept rule.
-4. Open **Playlists**, sync, choose destinations, and select automatic or
-   manual-review mode.
+3. Open **Playlists**, sync, and select automatic or manual-review mode.
+   Fallback playlists are only used when the default outcome accepts a video.
+4. Open **Rules**. Rules are evaluated top to bottom; the first match wins.
+   Each accepting rule chooses its own destination playlists. For example,
+   route videos from one channel to a channel-specific playlist, or route
+   videos at least 20 minutes long to a long-form playlist.
 5. Use **Run scan now** from the dashboard.
 
 The first scan of a channel uses the configurable lookback window (24 hours by
@@ -117,10 +120,12 @@ safe.
 ## Quota notes
 
 The default one-hour interval is deliberately conservative. Each enabled
-channel normally costs one `playlistItems.list` request per scan, and each
-successful playlist insertion costs substantially more quota than a read.
-Accounts with many subscriptions or several destination playlists may need a
-longer interval. Current quota usage is visible in Google Cloud Console.
+channel normally costs one `playlistItems.list` request per scan. The app uses
+one additional `videos.list` request per 50 newly discovered videos to read
+durations. Each successful playlist insertion costs substantially more quota
+than a read. Accounts with many subscriptions or several destination playlists
+may need a longer interval. Current quota usage is visible in Google Cloud
+Console.
 
 The worker stops paging a single channel after 500 unseen uploads and records a
 clear error instead of consuming unbounded quota.
@@ -169,7 +174,7 @@ docker compose up -d
 
 The workflow in `.github/workflows/container.yml` runs the tests and type
 checks, builds the production Docker target, and publishes the image to GitHub
-Container Registry. It runs on pushes to `main`, version tags such as `v1.0.0`,
+Container Registry. It runs on pushes to `main`, version tags such as `v1.1.0`,
 and manual dispatches. Pull requests perform the same verification and image
 build without publishing.
 
@@ -184,7 +189,7 @@ docker build --target production -t youtube-curator .
 - One owner and one connected YouTube account
 - SQLite only
 - One in-process scheduler/worker; overlapping scans are refused
-- Simple first-match rules rather than nested rule groups
+- Simple first-match rules rather than nested conditions or multi-match routing
 - At most 200 history rows per screen and 100 review items
 - Rule changes apply to videos discovered afterward; old videos are not
   reprocessed automatically

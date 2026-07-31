@@ -4,7 +4,7 @@
   <div>
     <p class="eyebrow">Destination</p>
     <h1>Playlists</h1>
-    <p>Choose where accepted videos go and whether they wait for review.</p>
+    <p>Sync available destinations and choose whether routed videos wait for review.</p>
   </div>
   <form method="post" action="/playlists/sync">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -42,7 +42,7 @@
         <input name="processingMode" type="radio" value="auto" <%= processingMode === "auto" ? "checked" : "" %>>
         <span>
           <strong>Automatic</strong>
-          <small>Matching videos are added to every selected playlist immediately.</small>
+          <small>Matching videos are added immediately to the playlists selected on their rule.</small>
         </span>
       </label>
     </div>
@@ -51,11 +51,12 @@
   <section class="panel">
     <div class="panel-heading">
       <div>
-        <p class="eyebrow">Targets</p>
-        <h2>Selected playlists</h2>
+        <p class="eyebrow">Fallback</p>
+        <h2>Fallback playlists</h2>
       </div>
       <span class="environment"><%= selectedIds.size %> selected</span>
     </div>
+    <p>Used only when the default outcome accepts a video with no matching rule, and for legacy review items created before per-rule routing.</p>
     <% if (playlists.length) { %>
       <div class="playlist-grid">
         <% playlists.forEach((playlist) => { %>
@@ -80,7 +81,7 @@
       </div>
     <% } %>
     <div class="form-footer">
-      <button class="button primary" type="submit">Save playlist settings</button>
+      <button class="button primary" type="submit">Save settings</button>
     </div>
   </section>
 </form>

@@ -47,6 +47,7 @@ function candidate(
     title,
     description: "A useful description",
     publishedAt,
+    durationSeconds: 12 * 60,
   };
 }
 
@@ -60,6 +61,7 @@ function configureSources(database: AppDatabase): void {
   ]);
   savePlaylistCatalog(database, [
     { id: "playlist-one", title: "Watch later-ish", privacyStatus: "private" },
+    { id: "playlist-two", title: "Channel picks", privacyStatus: "private" },
   ]);
   setSetting(
     database,
@@ -74,17 +76,26 @@ function insertRule(
     name: string;
     priority: number;
     action: "accept" | "reject";
-    field?: "title" | "description" | "channel";
-    operator?: "contains" | "not_contains" | "equals" | "regex";
+    field?: "title" | "description" | "channel" | "duration";
+    operator?:
+      | "contains"
+      | "not_contains"
+      | "equals"
+      | "regex"
+      | "less_than"
+      | "at_most"
+      | "at_least"
+      | "greater_than";
     value: string;
+    playlistIds?: string[];
   },
 ): void {
   database
     .prepare(
       `INSERT INTO rules (
-         name, priority, action, field, operator, value, enabled,
-         created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+         name, priority, action, field, operator, value, playlist_ids_json,
+         enabled, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
     )
     .run(
       input.name,
@@ -93,6 +104,11 @@ function insertRule(
       input.field ?? "title",
       input.operator ?? "contains",
       input.value,
+      JSON.stringify(
+        input.action === "accept"
+          ? (input.playlistIds ?? ["playlist-one"])
+          : [],
+      ),
       "2026-07-31T00:00:00.000Z",
       "2026-07-31T00:00:00.000Z",
     );
@@ -124,6 +140,7 @@ describe("rule evaluation", () => {
         field: "title",
         operator: "contains",
         value: "SHORT",
+        playlistIds: [],
       },
       {
         id: 2,
@@ -132,6 +149,7 @@ describe("rule evaluation", () => {
         field: "title",
         operator: "contains",
         value: "highlights",
+        playlistIds: ["playlist-one"],
       },
     ];
     const result = evaluateRules(
@@ -148,6 +166,31 @@ describe("rule evaluation", () => {
       evaluateRules([], "accept", candidate("video-one", "Anything")).outcome,
     ).toBe("accept");
   });
+
+  it("routes a duration match to the playlists configured on that rule", () => {
+    const video = candidate("video-one", "A long upload");
+    video.durationSeconds = 25 * 60;
+    const result = evaluateRules(
+      [
+        {
+          id: 3,
+          name: "Long videos",
+          action: "accept",
+          field: "duration",
+          operator: "at_least",
+          value: "20",
+          playlistIds: ["playlist-four"],
+        },
+      ],
+      "reject",
+      video,
+    );
+    expect(result).toMatchObject({
+      outcome: "accept",
+      ruleId: 3,
+      playlistIds: ["playlist-four"],
+    });
+  });
 });
 
 describe("video worker", () => {
@@ -160,6 +203,7 @@ describe("video worker", () => {
       priority: 10,
       action: "accept",
       value: "highlights",
+      playlistIds: ["playlist-two"],
     });
     const added: string[] = [];
     const youtube = fakeYouTube({
@@ -185,7 +229,7 @@ describe("video worker", () => {
       rejected: 1,
       added: 1,
     });
-    expect(added).toEqual(["video-accepted:playlist-one"]);
+    expect(added).toEqual(["video-accepted:playlist-two"]);
 
     const second = await worker.runOnce();
     expect(second.stats.discovered).toBe(0);
