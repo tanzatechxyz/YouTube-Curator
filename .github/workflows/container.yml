@@ -62,6 +62,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/tanzatechxyz/YouTube-Curator
 
       - name: Build and publish image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -71,3 +72,24 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-test published container
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          image_ref="ghcr.io/tanzatechxyz/youtube-curator@${IMAGE_DIGEST}"
+          container_id=$(docker run --detach --publish 127.0.0.1:39105:3000 "${image_ref}")
+          cleanup() {
+            docker logs "${container_id}" || true
+            docker rm --force "${container_id}" >/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:39105/healthz | grep --quiet '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Published container did not become healthy." >&2
+          exit 1
