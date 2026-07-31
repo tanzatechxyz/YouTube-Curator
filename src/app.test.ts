@@ -170,6 +170,9 @@ describe("first-run application", () => {
     const csrf = rulesPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
     expect(csrf).toBeTruthy();
     expect(rulesPage.text).toContain("View count");
+    expect(rulesPage.text).toContain("Content type");
+    expect(rulesPage.text).toContain("Short candidate (3 minutes or less)");
+    expect(rulesPage.text).toContain("Standard video (more than 3 minutes)");
     expect(rulesPage.text).toContain("Contains altered or synthetic media");
     expect(rulesPage.text).toContain("Scheduled live start date (UTC)");
 
@@ -231,6 +234,42 @@ describe("first-run application", () => {
 
     await agent.post("/rules").type("form").send({
       _csrf: csrf,
+      name: "Short candidates",
+      action: "accept",
+      field: "content_type",
+      operator: "equals",
+      value: "short_candidate",
+      playlistIds: "PL-highlights",
+    });
+    expect(
+      database
+        .prepare(
+          `SELECT field, operator, value FROM rules
+           WHERE name = 'Short candidates'`,
+        )
+        .get(),
+    ).toEqual({
+      field: "content_type",
+      operator: "equals",
+      value: "short_candidate",
+    });
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Invalid content type",
+      action: "accept",
+      field: "content_type",
+      operator: "equals",
+      value: "vertical_guess",
+      playlistIds: "PL-highlights",
+    });
+    expect(
+      (database.prepare("SELECT COUNT(*) AS count FROM rules").get() as { count: number })
+        .count,
+    ).toBe(3);
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
       name: "Invalid count rule",
       action: "accept",
       field: "view_count",
@@ -241,7 +280,7 @@ describe("first-run application", () => {
     expect(
       (database.prepare("SELECT COUNT(*) AS count FROM rules").get() as { count: number })
         .count,
-    ).toBe(2);
+    ).toBe(3);
 
     await agent.post("/rules").type("form").send({
       _csrf: csrf,
@@ -348,11 +387,13 @@ describe("first-run application", () => {
     expect(reviewPage.text).toContain("Why it matched");
     expect(reviewPage.text).toContain("Research");
     expect(reviewPage.text).toContain("12:34");
+    expect(reviewPage.text).toContain("Standard video");
 
     const historyPage = await agent.get("/history");
     expect(historyPage.status).toBe(200);
     expect(historyPage.text).toContain("A useful upload");
     expect(historyPage.text).toContain("pending");
+    expect(historyPage.text).toContain("Standard video");
   });
 
   it("updates worker settings and the owner password through the GUI", async () => {

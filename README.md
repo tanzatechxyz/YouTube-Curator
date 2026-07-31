@@ -14,6 +14,8 @@ configuration is performed in the browser.
 - Ordered, first-match routing/reject rules with per-rule playlists
 - Type-aware filtering across 50+ video metadata fields, including channel,
   text, tags, duration, counts, captions, status, dates, topics, and live data
+- A simple content-type rule for routing Short candidates separately from
+  standard videos
 - One-click private `Watch Later (Curator)` destination for automated routing
 - Automatic or manual-review processing
 - Idempotent video processing and playlist additions
@@ -118,7 +120,17 @@ Official references:
    route videos from one channel to a channel-specific playlist, or route
    videos at least 20 minutes long to a long-form playlist. The field selector
    is grouped by metadata type and shows only valid comparisons and values.
+   To separate short-form uploads, choose **Content type**, **equals**, then
+   either **Short candidate (3 minutes or less)** or
+   **Standard video (more than 3 minutes)**.
 5. Use **Run scan now** from the dashboard.
+
+YouTube classifies current Shorts using both duration and a square or vertical
+aspect ratio. The public Data API does not return an exact Shorts flag or a
+public source aspect ratio for videos from other channels, so Curator uses the
+available duration as a transparent best-effort classification. It labels
+videos up to three minutes long as **Short candidates**; the existing Duration
+field remains available when you need a different cutoff.
 
 The first scan of a channel uses the configurable lookback window (24 hours by
 default). Later scans overlap the previous watermark by five minutes. The
@@ -183,7 +195,7 @@ docker compose up -d
 The workflow in `.github/workflows/container.yml` runs the tests and type
 checks, builds the production Docker target, publishes the image to GitHub
 Container Registry, and starts the published digest for a health smoke test.
-It runs on pushes to `main`, version tags such as `v1.2.0`, and manual
+It runs on pushes to `main`, version tags such as `v1.3.0`, and manual
 dispatches. Pull requests perform the same verification and image build
 without publishing.
 

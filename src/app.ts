@@ -13,6 +13,7 @@ import {
   setSetting,
   type AppDatabase,
 } from "./db.js";
+import { classifyContentType } from "./filter.js";
 import {
   hashPassword,
   type SecretBox,
@@ -130,6 +131,17 @@ function formatDuration(value: unknown): string | undefined {
   return hours
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatContentType(value: unknown): string | undefined {
+  const contentType = classifyContentType(
+    typeof value === "number" ? value : undefined,
+  );
+  return contentType === "short_candidate"
+    ? "Short candidate"
+    : contentType === "standard_video"
+      ? "Standard video"
+      : undefined;
 }
 
 function safeNext(value: unknown): string {
@@ -1049,6 +1061,7 @@ export function createApp(dependencies: AppDependencies): Express {
       videos: videos.map((video) => ({
         ...video,
         durationLabel: formatDuration(video.duration_seconds),
+        contentTypeLabel: formatContentType(video.duration_seconds),
         destinations: destinations.all(video.video_id),
       })),
     });
@@ -1159,6 +1172,7 @@ export function createApp(dependencies: AppDependencies): Express {
       videos: videos.map((video) => ({
         ...video,
         durationLabel: formatDuration(video.duration_seconds),
+        contentTypeLabel: formatContentType(video.duration_seconds),
         additions: additionsQuery.all(video.video_id),
       })),
     });

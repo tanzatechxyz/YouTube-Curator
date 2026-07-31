@@ -159,6 +159,24 @@ export const RULE_FIELDS = [
     min: 0,
   },
   {
+    key: "content_type",
+    label: "Content type",
+    group: "Content details",
+    kind: "enum",
+    help:
+      "YouTube does not expose an exact Shorts flag or public source aspect ratio. Curator treats videos up to 3 minutes long as Short candidates.",
+    choices: [
+      {
+        value: "short_candidate",
+        label: "Short candidate (3 minutes or less)",
+      },
+      {
+        value: "standard_video",
+        label: "Standard video (more than 3 minutes)",
+      },
+    ],
+  },
+  {
     key: "definition",
     label: "Definition",
     group: "Content details",

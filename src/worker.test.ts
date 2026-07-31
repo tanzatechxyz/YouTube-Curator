@@ -192,6 +192,59 @@ describe("rule evaluation", () => {
     });
   });
 
+  it("differentiates short candidates from standard videos by duration", () => {
+    const rule = {
+      id: 4,
+      name: "Route short candidates",
+      action: "accept" as const,
+      field: "content_type" as const,
+      operator: "equals" as const,
+      value: "short_candidate",
+      playlistIds: ["playlist-shorts"],
+    };
+    const threeMinutes = candidate("video-short", "Three-minute upload");
+    threeMinutes.durationSeconds = 3 * 60;
+    const overThreeMinutes = candidate("video-standard", "Longer upload");
+    overThreeMinutes.durationSeconds = 3 * 60 + 1;
+    const unknownDuration = candidate("video-unknown", "Unknown duration");
+    unknownDuration.durationSeconds = undefined;
+
+    expect(evaluateRules([rule], "reject", threeMinutes)).toMatchObject({
+      outcome: "accept",
+      playlistIds: ["playlist-shorts"],
+    });
+    expect(evaluateRules([rule], "reject", overThreeMinutes).outcome).toBe(
+      "reject",
+    );
+    expect(
+      evaluateRules(
+        [
+          {
+            ...rule,
+            name: "Route standard videos",
+            value: "standard_video",
+          },
+        ],
+        "reject",
+        overThreeMinutes,
+      ).outcome,
+    ).toBe("accept");
+    expect(
+      evaluateRules(
+        [
+          {
+            ...rule,
+            name: "Missing duration",
+            operator: "is_empty",
+            value: "",
+          },
+        ],
+        "reject",
+        unknownDuration,
+      ).outcome,
+    ).toBe("accept");
+  });
+
   it("compares numeric, list, boolean, date, and unavailable metadata", () => {
     const video = candidate("video-metadata", "Metadata-rich upload");
     video.metadata = {

@@ -38,6 +38,23 @@ export interface FilterDecision {
   ruleId?: number;
 }
 
+export type ContentType = "short_candidate" | "standard_video";
+
+export function classifyContentType(
+  durationSeconds: number | null | undefined,
+): ContentType | undefined {
+  if (
+    typeof durationSeconds !== "number" ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds < 0
+  ) {
+    return undefined;
+  }
+  return durationSeconds <= 3 * 60
+    ? "short_candidate"
+    : "standard_video";
+}
+
 function candidateValue(
   field: RuleField,
   video: VideoCandidate,
@@ -61,6 +78,8 @@ function candidateValue(
       return video.durationSeconds === undefined
         ? undefined
         : video.durationSeconds / 60;
+    case "content_type":
+      return classifyContentType(video.durationSeconds);
     default:
       return video.metadata?.[field];
   }

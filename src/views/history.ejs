@@ -51,6 +51,7 @@
             <p class="video-channel">
               <%= video.channel_title %> · <%= video.published_at %>
               <% if (video.durationLabel) { %> · <%= video.durationLabel %><% } %>
+              <% if (video.contentTypeLabel) { %> · <%= video.contentTypeLabel %><% } %>
             </p>
             <p class="history-reason"><%= video.decision_reason %></p>
             <% if (video.additions.length) { %>
