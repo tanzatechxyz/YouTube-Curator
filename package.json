@@ -1,0 +1,39 @@
+{
+  "name": "youtube-curator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A small self-hosted YouTube subscription curator.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "overrides": {
+    "gaxios": "7.3.0"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc && node scripts/copy-assets.mjs",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.2",
+    "ejs": "6.0.1",
+    "express": "5.2.1",
+    "googleapis": "173.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "@types/ejs": "3.1.5",
+    "@types/express": "5.0.6",
+    "@types/node": "24.13.3",
+    "@types/supertest": "7.2.1",
+    "nock": "14.0.17",
+    "supertest": "7.2.2",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,0 +1,28 @@
+<%- include("partials/head") %>
+<main class="setup-shell">
+  <section class="setup-card login-card">
+    <div class="brand setup-brand">
+      <span class="brand-mark" aria-hidden="true">▶</span>
+      <span>YouTube Curator</span>
+    </div>
+    <p class="eyebrow">Owner access</p>
+    <h1>Welcome back.</h1>
+    <p class="lede">Sign in to manage your YouTube connection and processing rules.</p>
+
+    <% if (notice) { %><div class="notice success" role="status"><%= notice %></div><% } %>
+    <% if (typeof formError !== "undefined" && formError) { %>
+      <div class="notice error" role="alert"><%= formError %></div>
+    <% } %>
+
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="next" value="<%= next %>">
+      <label>
+        Owner password
+        <input name="password" type="password" required autofocus autocomplete="current-password">
+      </label>
+      <button class="button primary" type="submit">Sign in</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>

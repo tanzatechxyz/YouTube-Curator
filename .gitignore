@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+.DS_Store
+.node-headers/
+.stage-data/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

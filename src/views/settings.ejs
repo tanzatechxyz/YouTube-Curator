@@ -1,0 +1,114 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Application</p>
+    <h1>Settings</h1>
+    <p>Control the worker and owner access without changing deployment files.</p>
+  </div>
+  <span class="environment">Version <%= version %></span>
+</div>
+
+<section class="two-column">
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Schedule</p>
+        <h2>Background worker</h2>
+      </div>
+      <span class="status-pill <%= workerEnabled ? 'good' : 'muted' %>">
+        <span class="status-dot"></span>
+        <%= schedulerStatus.running ? "Running" : workerEnabled ? "Enabled" : "Paused" %>
+      </span>
+    </div>
+    <form method="post" action="/settings/worker" class="settings-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label class="toggle-row">
+        <span>
+          <strong>Automatic checks</strong>
+          <small>Keep checking enabled subscriptions on the schedule below.</small>
+        </span>
+        <input name="workerEnabled" type="checkbox" value="true" <%= workerEnabled ? "checked" : "" %>>
+      </label>
+      <label>
+        Polling interval (minutes)
+        <input name="pollIntervalMinutes" type="number" min="5" max="1440" step="1" value="<%= pollIntervalMinutes %>" required>
+        <small>60 minutes is a quota-friendly default for a personal account.</small>
+      </label>
+      <label>
+        First-scan lookback (hours)
+        <input name="initialLookbackHours" type="number" min="1" max="168" step="1" value="<%= initialLookbackHours %>" required>
+        <small>Only applies the first time a newly synced channel is scanned.</small>
+      </label>
+      <button class="button primary" type="submit">Save worker settings</button>
+    </form>
+    <% if (schedulerStatus.nextRunAt) { %>
+      <p class="next-run">Next scheduler check: <%= schedulerStatus.nextRunAt %></p>
+    <% } %>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Owner access</p>
+        <h2>Change password</h2>
+      </div>
+    </div>
+    <form method="post" action="/settings/password" class="settings-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>
+        Current password
+        <input name="currentPassword" type="password" required autocomplete="current-password">
+      </label>
+      <label>
+        New password
+        <input name="newPassword" type="password" minlength="8" required autocomplete="new-password">
+      </label>
+      <label>
+        Confirm new password
+        <input name="confirmPassword" type="password" minlength="8" required autocomplete="new-password">
+      </label>
+      <button class="button secondary" type="submit">Change password</button>
+    </form>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Status and errors</p>
+      <h2>Recent worker runs</h2>
+    </div>
+    <a class="text-link" href="/">Dashboard →</a>
+  </div>
+  <% if (runs.length) { %>
+    <div class="run-list">
+      <% runs.forEach((run) => { %>
+        <article class="run-row">
+          <span class="status-pill <%= run.status === 'succeeded' ? 'good' : run.status === 'failed' ? 'warning' : 'muted' %>">
+            <span class="status-dot"></span>
+            <%= run.status %>
+          </span>
+          <div>
+            <strong><%= run.started_at %></strong>
+            <p>
+              <%= run.stats.discovered || 0 %> discovered ·
+              <%= run.stats.accepted || 0 %> accepted ·
+              <%= run.stats.rejected || 0 %> rejected ·
+              <%= run.stats.added || 0 %> added
+            </p>
+            <% if (run.error_message) { %>
+              <p class="run-message"><%= run.error_message %></p>
+            <% } %>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <div class="empty-state compact">
+      <h3>No worker runs yet</h3>
+      <p>Connect YouTube and use “Run scan now” from the dashboard.</p>
+    </div>
+  <% } %>
+</section>
+<%- include("partials/footer") %>

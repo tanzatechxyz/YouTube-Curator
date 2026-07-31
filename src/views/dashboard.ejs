@@ -1,0 +1,106 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Overview</p>
+    <h1>Dashboard</h1>
+    <p>At-a-glance health and processing activity.</p>
+  </div>
+  <div class="heading-actions">
+    <span class="status-pill <%= workerEnabled ? 'good' : 'muted' %>">
+      <span class="status-dot"></span>
+      Worker <%= workerRunning ? "running" : workerEnabled ? "enabled" : "paused" %>
+    </span>
+    <form method="post" action="/worker/run">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="button primary" type="submit" <%= accountConnected && !workerRunning ? "" : "disabled" %>>
+        Run scan now
+      </button>
+    </form>
+  </div>
+</div>
+
+<section class="metric-grid" aria-label="Processing totals">
+  <article class="metric">
+    <span>Subscriptions</span>
+    <strong><%= counts.enabledSubscriptions %><small> / <%= counts.subscriptions %></small></strong>
+    <p>enabled / synced</p>
+  </article>
+  <article class="metric">
+    <span>Needs review</span>
+    <strong><%= counts.pendingReview %></strong>
+    <p>waiting for a decision</p>
+  </article>
+  <article class="metric">
+    <span>Accepted</span>
+    <strong><%= counts.accepted %></strong>
+    <p>approved by rules or review</p>
+  </article>
+  <article class="metric">
+    <span>Added</span>
+    <strong><%= counts.added %></strong>
+    <p>playlist additions completed</p>
+  </article>
+</section>
+
+<section class="two-column">
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Connection</p>
+        <h2>YouTube account</h2>
+      </div>
+      <span class="status-pill <%= accountConnected ? 'good' : 'warning' %>">
+        <span class="status-dot"></span>
+        <%= accountConnected ? "Connected" : "Not connected" %>
+      </span>
+    </div>
+    <p>
+      <%= accountConnected
+        ? "Your account is ready for subscription and playlist sync."
+        : "Connect a Google account before the first subscription scan." %>
+    </p>
+    <a class="text-link" href="/account">Open account settings →</a>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Processing</p>
+        <h2><%= processingMode === "auto" ? "Automatic mode" : "Manual review" %></h2>
+      </div>
+    </div>
+    <p>
+      <%= processingMode === "auto"
+        ? "Matching videos are added to selected playlists immediately."
+        : "Matching videos wait in the review queue before playlist changes." %>
+    </p>
+    <a class="text-link" href="/playlists">Change processing mode →</a>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Background work</p>
+      <h2>Latest run</h2>
+    </div>
+  </div>
+  <% if (lastRun) { %>
+    <dl class="details">
+      <div><dt>Status</dt><dd><%= lastRun.status %></dd></div>
+      <div><dt>Started</dt><dd><%= lastRun.started_at %></dd></div>
+      <div><dt>Finished</dt><dd><%= lastRun.finished_at || "Running" %></dd></div>
+    </dl>
+    <% if (lastRun.error_message) { %>
+      <div class="notice error run-error"><%= lastRun.error_message %></div>
+    <% } %>
+  <% } else { %>
+    <div class="empty-state compact">
+      <h3>No scans yet</h3>
+      <p>The first run will appear here after an account is connected.</p>
+    </div>
+  <% } %>
+  <% if (nextRunAt) { %><p class="next-run">Next scheduled check: <%= nextRunAt %></p><% } %>
+</section>
+<%- include("partials/footer") %>

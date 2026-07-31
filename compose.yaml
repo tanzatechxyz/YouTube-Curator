@@ -1,0 +1,11 @@
+services:
+  app:
+    image: ghcr.io/tanzatechxyz/youtube-curator:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - youtube-curator-data:/data
+    restart: unless-stopped
+
+volumes:
+  youtube-curator-data:

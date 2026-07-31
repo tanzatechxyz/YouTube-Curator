@@ -1,0 +1,85 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Sources</p>
+    <h1>Subscriptions</h1>
+    <p>Choose which subscribed channels the worker should inspect.</p>
+  </div>
+  <form method="post" action="/subscriptions/sync">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="button primary" type="submit" <%= accountConnected ? "" : "disabled" %>>
+      Sync from YouTube
+    </button>
+  </form>
+</div>
+
+<% if (!accountConnected) { %>
+  <div class="notice error">
+    Connect a YouTube account before syncing.
+    <a class="text-link" href="/account">Open account settings →</a>
+  </div>
+<% } %>
+
+<section class="summary-strip" aria-label="Subscription summary">
+  <div><strong><%= total %></strong><span>synced channels</span></div>
+  <div><strong><%= enabled %></strong><span>enabled for scans</span></div>
+  <div><strong><%= total - enabled %></strong><span>paused</span></div>
+</section>
+
+<section class="panel">
+  <div class="list-toolbar">
+    <div>
+      <p class="eyebrow">Channel list</p>
+      <h2>Current subscriptions</h2>
+    </div>
+    <form method="get" action="/subscriptions" class="search-form" role="search">
+      <label class="sr-only" for="subscription-search">Search subscriptions</label>
+      <input id="subscription-search" name="q" type="search" value="<%= query %>" placeholder="Search channels">
+      <button class="button secondary" type="submit">Search</button>
+    </form>
+  </div>
+
+  <% if (subscriptions.length) { %>
+    <div class="resource-list">
+      <% subscriptions.forEach((subscription) => { %>
+        <article class="resource-row">
+          <div class="resource-identity">
+            <% if (subscription.thumbnail_url) { %>
+              <img src="<%= subscription.thumbnail_url %>" alt="">
+            <% } else { %>
+              <span class="avatar-placeholder small" aria-hidden="true"><%= subscription.title.charAt(0) %></span>
+            <% } %>
+            <div>
+              <h3><%= subscription.title %></h3>
+              <p class="mono"><%= subscription.channel_id %></p>
+            </div>
+          </div>
+          <div class="resource-actions">
+            <span class="status-pill <%= subscription.enabled ? 'good' : 'muted' %>">
+              <span class="status-dot"></span>
+              <%= subscription.enabled ? "Enabled" : "Paused" %>
+            </span>
+            <form method="post" action="/subscriptions/<%= subscription.channel_id %>/toggle">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="button secondary small-button" type="submit">
+                <%= subscription.enabled ? "Pause" : "Enable" %>
+              </button>
+            </form>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <div class="empty-state">
+      <div class="empty-icon" aria-hidden="true">◎</div>
+      <h3><%= query ? "No matching channels" : "No subscriptions synced" %></h3>
+      <p>
+        <%= query
+          ? "Try a different search."
+          : "Connect your account, then sync to populate this list." %>
+      </p>
+    </div>
+  <% } %>
+</section>
+<%- include("partials/footer") %>

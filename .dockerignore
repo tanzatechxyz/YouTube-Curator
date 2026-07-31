@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.git
+.node-headers
+.stage-data
+data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+npm-debug.log

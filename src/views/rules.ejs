@@ -1,0 +1,132 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Filtering</p>
+    <h1>Rules</h1>
+    <p>The first enabled rule that matches decides a video’s filter outcome.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Fallback</p>
+      <h2>When no rule matches</h2>
+    </div>
+  </div>
+  <form method="post" action="/rules/default" class="inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>
+      Default outcome
+      <select name="defaultOutcome">
+        <option value="reject" <%= defaultOutcome === "reject" ? "selected" : "" %>>Reject the video</option>
+        <option value="accept" <%= defaultOutcome === "accept" ? "selected" : "" %>>Accept the video</option>
+      </select>
+    </label>
+    <button class="button secondary" type="submit">Save default</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">New filter</p>
+      <h2>Add a rule</h2>
+    </div>
+  </div>
+  <form method="post" action="/rules" class="rule-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>
+      Name
+      <input name="name" maxlength="80" placeholder="Keep weekly highlights" required>
+    </label>
+    <label>
+      Action
+      <select name="action">
+        <option value="accept">Accept</option>
+        <option value="reject">Reject</option>
+      </select>
+    </label>
+    <label>
+      Field
+      <select name="field">
+        <option value="title">Title</option>
+        <option value="description">Description</option>
+        <option value="channel">Channel name</option>
+      </select>
+    </label>
+    <label>
+      Comparison
+      <select name="operator">
+        <option value="contains">contains</option>
+        <option value="not_contains">does not contain</option>
+        <option value="equals">equals</option>
+        <option value="regex">matches regex</option>
+      </select>
+    </label>
+    <label class="rule-value">
+      Value
+      <input name="value" maxlength="500" placeholder="highlights" required>
+    </label>
+    <button class="button primary" type="submit">Add rule</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Evaluation order</p>
+      <h2>Configured rules</h2>
+    </div>
+    <span class="environment"><%= rules.length %> total</span>
+  </div>
+  <% if (rules.length) { %>
+    <ol class="rule-list">
+      <% rules.forEach((rule, index) => { %>
+        <li class="<%= rule.enabled ? '' : 'disabled-row' %>">
+          <span class="rule-order"><%= index + 1 %></span>
+          <div class="rule-copy">
+            <div class="rule-title">
+              <h3><%= rule.name %></h3>
+              <span class="decision-badge <%= rule.action %>"><%= rule.action %></span>
+              <% if (!rule.enabled) { %><span class="status-pill muted">Disabled</span><% } %>
+            </div>
+            <p>
+              <strong><%= rule.field === "channel" ? "channel name" : rule.field %></strong>
+              <%= rule.operator.replace("_", " ") %>
+              <code><%= rule.value %></code>
+            </p>
+          </div>
+          <div class="rule-actions">
+            <form method="post" action="/rules/<%= rule.id %>/move">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="direction" value="up">
+              <button class="icon-button" type="submit" title="Move up" <%= index === 0 ? "disabled" : "" %>>↑</button>
+            </form>
+            <form method="post" action="/rules/<%= rule.id %>/move">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="direction" value="down">
+              <button class="icon-button" type="submit" title="Move down" <%= index === rules.length - 1 ? "disabled" : "" %>>↓</button>
+            </form>
+            <a class="button secondary small-button" href="/rules/<%= rule.id %>/edit">Edit</a>
+            <form method="post" action="/rules/<%= rule.id %>/toggle">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="button secondary small-button" type="submit"><%= rule.enabled ? "Disable" : "Enable" %></button>
+            </form>
+            <form method="post" action="/rules/<%= rule.id %>/delete">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="icon-button danger-text" type="submit" title="Delete rule">×</button>
+            </form>
+          </div>
+        </li>
+      <% }) %>
+    </ol>
+  <% } else { %>
+    <div class="empty-state compact">
+      <h3>No rules yet</h3>
+      <p>The safe default is to reject videos until you add an accept rule.</p>
+    </div>
+  <% } %>
+</section>
+<%- include("partials/footer") %>

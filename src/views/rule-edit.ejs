@@ -1,0 +1,50 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Filtering</p>
+    <h1>Edit rule</h1>
+    <p>Changes apply only to videos discovered after you save.</p>
+  </div>
+  <a class="button secondary" href="/rules">Cancel</a>
+</div>
+
+<section class="panel">
+  <form method="post" action="/rules/<%= rule.id %>" class="rule-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>
+      Name
+      <input name="name" maxlength="80" value="<%= rule.name %>" required>
+    </label>
+    <label>
+      Action
+      <select name="action">
+        <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Accept</option>
+        <option value="reject" <%= rule.action === "reject" ? "selected" : "" %>>Reject</option>
+      </select>
+    </label>
+    <label>
+      Field
+      <select name="field">
+        <option value="title" <%= rule.field === "title" ? "selected" : "" %>>Title</option>
+        <option value="description" <%= rule.field === "description" ? "selected" : "" %>>Description</option>
+        <option value="channel" <%= rule.field === "channel" ? "selected" : "" %>>Channel name</option>
+      </select>
+    </label>
+    <label>
+      Comparison
+      <select name="operator">
+        <option value="contains" <%= rule.operator === "contains" ? "selected" : "" %>>contains</option>
+        <option value="not_contains" <%= rule.operator === "not_contains" ? "selected" : "" %>>does not contain</option>
+        <option value="equals" <%= rule.operator === "equals" ? "selected" : "" %>>equals</option>
+        <option value="regex" <%= rule.operator === "regex" ? "selected" : "" %>>matches regex</option>
+      </select>
+    </label>
+    <label class="rule-value">
+      Value
+      <input name="value" maxlength="500" value="<%= rule.value %>" required>
+    </label>
+    <button class="button primary" type="submit">Save rule</button>
+  </form>
+</section>
+<%- include("partials/footer") %>

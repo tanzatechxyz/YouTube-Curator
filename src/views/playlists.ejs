@@ -1,0 +1,87 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Destination</p>
+    <h1>Playlists</h1>
+    <p>Choose where accepted videos go and whether they wait for review.</p>
+  </div>
+  <form method="post" action="/playlists/sync">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="button primary" type="submit" <%= accountConnected ? "" : "disabled" %>>
+      Sync playlists
+    </button>
+  </form>
+</div>
+
+<% if (!accountConnected) { %>
+  <div class="notice error">
+    Connect a YouTube account before syncing playlists.
+    <a class="text-link" href="/account">Open account settings →</a>
+  </div>
+<% } %>
+
+<form method="post" action="/playlists/settings">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Decision flow</p>
+        <h2>Processing mode</h2>
+      </div>
+    </div>
+    <div class="choice-grid">
+      <label class="choice-card">
+        <input name="processingMode" type="radio" value="review" <%= processingMode === "review" ? "checked" : "" %>>
+        <span>
+          <strong>Manual review</strong>
+          <small>Matching videos wait in the review queue before any playlist change.</small>
+        </span>
+      </label>
+      <label class="choice-card">
+        <input name="processingMode" type="radio" value="auto" <%= processingMode === "auto" ? "checked" : "" %>>
+        <span>
+          <strong>Automatic</strong>
+          <small>Matching videos are added to every selected playlist immediately.</small>
+        </span>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Targets</p>
+        <h2>Selected playlists</h2>
+      </div>
+      <span class="environment"><%= selectedIds.size %> selected</span>
+    </div>
+    <% if (playlists.length) { %>
+      <div class="playlist-grid">
+        <% playlists.forEach((playlist) => { %>
+          <label class="playlist-card">
+            <input name="playlistIds" type="checkbox" value="<%= playlist.id %>" <%= selectedIds.has(playlist.id) ? "checked" : "" %>>
+            <% if (playlist.thumbnailUrl) { %>
+              <img src="<%= playlist.thumbnailUrl %>" alt="">
+            <% } else { %>
+              <span class="playlist-placeholder" aria-hidden="true">▶</span>
+            <% } %>
+            <span class="playlist-copy">
+              <strong><%= playlist.title %></strong>
+              <small><%= playlist.privacyStatus %></small>
+            </span>
+          </label>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <div class="empty-state compact">
+        <h3>No playlists synced</h3>
+        <p>Sync after connecting your YouTube account.</p>
+      </div>
+    <% } %>
+    <div class="form-footer">
+      <button class="button primary" type="submit">Save playlist settings</button>
+    </div>
+  </section>
+</form>
+<%- include("partials/footer") %>

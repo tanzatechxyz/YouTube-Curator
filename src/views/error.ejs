@@ -1,0 +1,9 @@
+<%- include("partials/head") %>
+<% if (configured) { %><%- include("partials/header") %><% } else { %><main class="setup-shell"><section class="setup-card"><% } %>
+<div class="empty-state">
+  <p class="eyebrow">Error <%= statusCode %></p>
+  <h1><%= title %></h1>
+  <p><%= message %></p>
+  <a class="button secondary" href="/">Go to dashboard</a>
+</div>
+<% if (configured) { %><%- include("partials/footer") %><% } else { %></section></main></body></html><% } %>

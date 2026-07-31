@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      target: development
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      DATA_DIR: /data
+    volumes:
+      - .:/app
+      - youtube-curator-node-modules:/app/node_modules
+      - youtube-curator-dev-data:/data
+    restart: "no"
+
+volumes:
+  youtube-curator-node-modules:
+  youtube-curator-dev-data:

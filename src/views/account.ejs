@@ -1,0 +1,91 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Connection</p>
+    <h1>YouTube account</h1>
+    <p>Configure Google OAuth and connect the one account this app will use.</p>
+  </div>
+  <span class="status-pill <%= account ? 'good' : 'warning' %>">
+    <span class="status-dot"></span>
+    <%= account ? "Connected" : "Not connected" %>
+  </span>
+</div>
+
+<% if (account) { %>
+  <section class="panel account-card">
+    <div class="account-identity">
+      <% if (account.thumbnailUrl) { %>
+        <img src="<%= account.thumbnailUrl %>" alt="">
+      <% } else { %>
+        <span class="avatar-placeholder" aria-hidden="true"><%= account.displayName.charAt(0) %></span>
+      <% } %>
+      <div>
+        <p class="eyebrow">Active channel</p>
+        <h2><%= account.displayName %></h2>
+        <p class="mono"><%= account.youtubeChannelId %></p>
+      </div>
+    </div>
+    <div class="button-row">
+      <a class="button secondary" href="/auth/google">Reconnect</a>
+      <form method="post" action="/account/disconnect">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="button danger" type="submit">Disconnect</button>
+      </form>
+    </div>
+  </section>
+<% } else { %>
+  <section class="panel callout">
+    <div>
+      <p class="eyebrow">Next step</p>
+      <h2>Authorize YouTube access</h2>
+      <p>
+        The app requests permission to read subscriptions and manage playlist
+        items. It does not request Google Drive, Gmail, or account-administration access.
+      </p>
+    </div>
+    <% if (oauthConfigured) { %>
+      <a class="button primary" href="/auth/google">Connect Google account</a>
+    <% } else { %>
+      <span class="status-pill warning"><span class="status-dot"></span>OAuth setup required</span>
+    <% } %>
+  </section>
+<% } %>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Google Cloud</p>
+      <h2>OAuth application settings</h2>
+    </div>
+    <span class="status-pill <%= oauthConfigured ? 'good' : 'muted' %>">
+      <span class="status-dot"></span>
+      <%= oauthConfigured ? "Ready" : "Incomplete" %>
+    </span>
+  </div>
+  <p class="section-intro">
+    Create a Desktop/Web OAuth client with the YouTube Data API v3 enabled,
+    then paste its values here. Secrets are encrypted before storage.
+  </p>
+  <form method="post" action="/account/oauth-settings" class="form-grid">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label class="full-width">
+      Application URL
+      <input name="publicUrl" type="url" value="<%= publicUrl %>" required>
+    </label>
+    <label>
+      Client ID
+      <input name="googleClientId" type="text" value="<%= clientId %>" required autocomplete="off">
+    </label>
+    <label>
+      Client secret
+      <input name="googleClientSecret" type="password" placeholder="<%= secretSaved ? 'Saved — leave blank to keep it' : 'Required' %>" autocomplete="off">
+    </label>
+    <div class="copy-field full-width">
+      <span>Authorized redirect URI</span>
+      <code><%= redirectUri %></code>
+    </div>
+    <button class="button secondary" type="submit">Save OAuth settings</button>
+  </form>
+</section>
+<%- include("partials/footer") %>

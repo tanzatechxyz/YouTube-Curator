@@ -1,0 +1,56 @@
+<%- include("partials/head") %>
+<main class="setup-shell">
+  <section class="setup-card">
+    <div class="brand setup-brand">
+      <span class="brand-mark" aria-hidden="true">▶</span>
+      <span>YouTube Curator</span>
+    </div>
+    <p class="eyebrow">First-run setup</p>
+    <h1>Keep your subscriptions useful.</h1>
+    <p class="lede">
+      This application watches subscribed channels, applies your rules, and
+      sends matching videos to playlists you choose.
+    </p>
+
+    <% if (typeof formError !== "undefined" && formError) { %>
+      <div class="notice error" role="alert"><%= formError %></div>
+    <% } %>
+
+    <form method="post" action="/setup" class="stack">
+      <label>
+        Owner password
+        <input name="password" type="password" minlength="8" required autocomplete="new-password">
+        <small>One owner only; no roles or user management.</small>
+      </label>
+
+      <label>
+        Application URL
+        <input name="publicUrl" type="url" value="<%= publicUrl %>" required>
+        <small>Use the URL you will open in your browser.</small>
+      </label>
+
+      <div class="field-group">
+        <div>
+          <h2>Google OAuth credentials</h2>
+          <p>You may add these now or later in Settings.</p>
+        </div>
+        <label>
+          Client ID
+          <input name="googleClientId" type="text" autocomplete="off">
+        </label>
+        <label>
+          Client secret
+          <input name="googleClientSecret" type="password" autocomplete="off">
+        </label>
+        <div class="copy-field">
+          <span>Authorized redirect URI</span>
+          <code><%= redirectUri %></code>
+        </div>
+      </div>
+
+      <button class="button primary" type="submit">Save setup</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>

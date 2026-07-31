@@ -1,0 +1,82 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+<div class="page-heading">
+  <div>
+    <p class="eyebrow">Audit trail</p>
+    <h1>Processing history</h1>
+    <p>Every discovered video and each playlist-add attempt stays visible here.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <form method="get" action="/history" class="history-filters">
+    <label>
+      Status
+      <select name="status">
+        <option value="all" <%= status === "all" ? "selected" : "" %>>All videos</option>
+        <option value="pending" <%= status === "pending" ? "selected" : "" %>>Pending review</option>
+        <option value="accepted" <%= status === "accepted" ? "selected" : "" %>>Accepted</option>
+        <option value="rejected" <%= status === "rejected" ? "selected" : "" %>>Rejected</option>
+        <option value="added" <%= status === "added" ? "selected" : "" %>>Added</option>
+        <option value="failed" <%= status === "failed" ? "selected" : "" %>>Add failed</option>
+      </select>
+    </label>
+    <label>
+      Search
+      <input name="q" type="search" value="<%= query %>" placeholder="Video or channel">
+    </label>
+    <button class="button secondary" type="submit">Apply filters</button>
+  </form>
+</section>
+
+<section class="panel history-panel">
+  <% if (videos.length) { %>
+    <div class="history-list">
+      <% videos.forEach((video) => { %>
+        <article class="history-row">
+          <a class="history-thumbnail" href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank" rel="noreferrer">
+            <% if (video.thumbnail_url) { %>
+              <img src="<%= video.thumbnail_url %>" alt="">
+            <% } else { %>
+              <span aria-hidden="true">▶</span>
+            <% } %>
+          </a>
+          <div class="history-copy">
+            <div class="history-title-line">
+              <h2>
+                <a href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank" rel="noreferrer"><%= video.title %></a>
+              </h2>
+              <span class="decision-badge <%= video.decision === 'accepted' ? 'accept' : video.decision === 'rejected' ? 'reject' : 'pending' %>"><%= video.decision %></span>
+            </div>
+            <p class="video-channel"><%= video.channel_title %> · <%= video.published_at %></p>
+            <p class="history-reason"><%= video.decision_reason %></p>
+            <% if (video.additions.length) { %>
+              <div class="addition-list">
+                <% video.additions.forEach((addition) => { %>
+                  <span class="addition <%= addition.status %>" title="<%= addition.error_message || '' %>">
+                    <%= addition.playlist_title %>: <%= addition.status %>
+                  </span>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <p class="no-addition">No playlist addition requested.</p>
+            <% } %>
+          </div>
+          <% if (video.decision === "accepted" && (video.additions.length === 0 || video.additions.some((addition) => addition.status === "failed"))) { %>
+            <form method="post" action="/history/<%= video.video_id %>/retry">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="button secondary small-button" type="submit">Retry / add now</button>
+            </form>
+          <% } %>
+        </article>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <div class="empty-state">
+      <div class="empty-icon" aria-hidden="true">↺</div>
+      <h2>No matching history</h2>
+      <p>Run a scan or change the filters above.</p>
+    </div>
+  <% } %>
+</section>
+<%- include("partials/footer") %>

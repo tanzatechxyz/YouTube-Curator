@@ -1,0 +1,27 @@
+<header class="topbar">
+  <a class="brand" href="/" aria-label="YouTube Curator dashboard">
+    <span class="brand-mark" aria-hidden="true">▶</span>
+    <span>YouTube Curator</span>
+  </a>
+  <div class="topbar-actions">
+    <span class="environment">Personal</span>
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="quiet-button" type="submit">Sign out</button>
+    </form>
+  </div>
+</header>
+<div class="app-shell">
+  <nav class="sidebar" aria-label="Primary navigation">
+    <a class="<%= path === '/' ? 'active' : '' %>" href="/">Dashboard</a>
+    <a class="<%= path === '/account' ? 'active' : '' %>" href="/account">YouTube account</a>
+    <a class="<%= path === '/subscriptions' ? 'active' : '' %>" href="/subscriptions">Subscriptions</a>
+    <a class="<%= path === '/rules' ? 'active' : '' %>" href="/rules">Rules</a>
+    <a class="<%= path === '/playlists' ? 'active' : '' %>" href="/playlists">Playlists</a>
+    <a class="<%= path === '/review' ? 'active' : '' %>" href="/review">Review queue</a>
+    <a class="<%= path === '/history' ? 'active' : '' %>" href="/history">History</a>
+    <a class="<%= path === '/settings' ? 'active' : '' %>" href="/settings">Settings</a>
+  </nav>
+  <main class="content" id="main-content">
+    <% if (notice) { %><div class="notice success" role="status"><%= notice %></div><% } %>
+    <% if (error) { %><div class="notice error" role="alert"><%= error %></div><% } %>
