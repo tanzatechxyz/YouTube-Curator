@@ -786,6 +786,32 @@ export function createApp(dependencies: AppDependencies): Express {
     redirectWith(response, "/rules", "notice", "Rule created");
   });
 
+  // Keep this static route ahead of /rules/:id so Express does not treat
+  // "default" as a rule ID.
+  app.post("/rules/default", (request, response) => {
+    const outcome = text(request.body.defaultOutcome);
+    if (!["accept", "reject"].includes(outcome)) {
+      redirectWith(response, "/rules", "error", "Choose a valid default outcome.");
+      return;
+    }
+    if (
+      outcome === "accept" &&
+      parseStringArray(
+        getSetting(database, "selected_playlists_json") ?? "[]",
+      ).length === 0
+    ) {
+      redirectWith(
+        response,
+        "/rules",
+        "error",
+        "Choose at least one fallback playlist before using default accept.",
+      );
+      return;
+    }
+    setSetting(database, "default_outcome", outcome);
+    redirectWith(response, "/rules", "notice", "Default outcome saved");
+  });
+
   app.get("/rules/:id/edit", (request, response) => {
     const rule = database
       .prepare(
@@ -910,30 +936,6 @@ export function createApp(dependencies: AppDependencies): Express {
       })();
     }
     redirectWith(response, "/rules", "notice", "Rule order updated");
-  });
-
-  app.post("/rules/default", (request, response) => {
-    const outcome = text(request.body.defaultOutcome);
-    if (!["accept", "reject"].includes(outcome)) {
-      redirectWith(response, "/rules", "error", "Choose a valid default outcome.");
-      return;
-    }
-    if (
-      outcome === "accept" &&
-      parseStringArray(
-        getSetting(database, "selected_playlists_json") ?? "[]",
-      ).length === 0
-    ) {
-      redirectWith(
-        response,
-        "/rules",
-        "error",
-        "Choose at least one fallback playlist before using default accept.",
-      );
-      return;
-    }
-    setSetting(database, "default_outcome", outcome);
-    redirectWith(response, "/rules", "notice", "Default outcome saved");
   });
 
   app.get("/playlists", (_request, response) => {

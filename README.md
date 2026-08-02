@@ -195,7 +195,7 @@ docker compose up -d
 The workflow in `.github/workflows/container.yml` runs the tests and type
 checks, builds the production Docker target, publishes the image to GitHub
 Container Registry, and starts the published digest for a health smoke test.
-It runs on pushes to `main`, version tags such as `v1.3.0`, and manual
+It runs on pushes to `main`, version tags such as `v1.3.1`, and manual
 dispatches. Pull requests perform the same verification and image build
 without publishing.
 

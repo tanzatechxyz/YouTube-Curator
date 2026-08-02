@@ -316,6 +316,51 @@ describe("first-run application", () => {
     ]);
   });
 
+  it("updates the fallback outcome without treating default as a rule ID", async () => {
+    const { app, database } = testApplication();
+    const agent = request.agent(app);
+    await agent.post("/setup").type("form").send({
+      password: "correct horse",
+      publicUrl: "http://localhost:3000",
+      googleClientId: "",
+      googleClientSecret: "",
+    });
+    savePlaylistCatalog(database, [
+      { id: "PL-fallback", title: "Fallback", privacyStatus: "private" },
+    ]);
+    const rulesPage = await agent.get("/rules");
+    const csrf = rulesPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
+
+    const missingPlaylist = await agent
+      .post("/rules/default")
+      .type("form")
+      .send({ _csrf: csrf, defaultOutcome: "accept" });
+    expect(missingPlaylist.status).toBe(302);
+    expect(decodeURIComponent(missingPlaylist.headers.location)).toContain(
+      "Choose at least one fallback playlist",
+    );
+    expect(getSetting(database, "default_outcome")).toBe("reject");
+
+    await agent.post("/playlists/settings").type("form").send({
+      _csrf: csrf,
+      processingMode: "auto",
+      playlistIds: "PL-fallback",
+    });
+    const accepted = await agent
+      .post("/rules/default")
+      .type("form")
+      .send({ _csrf: csrf, defaultOutcome: "accept" });
+    expect(accepted.status).toBe(302);
+    expect(decodeURIComponent(accepted.headers.location)).toContain(
+      "Default outcome saved",
+    );
+    expect(getSetting(database, "default_outcome")).toBe("accept");
+    expect(
+      (database.prepare("SELECT COUNT(*) AS count FROM rules").get() as { count: number })
+        .count,
+    ).toBe(0);
+  });
+
   it("saves only playlist IDs present in the synced catalog", async () => {
     const { app, database } = testApplication();
     const agent = request.agent(app);
