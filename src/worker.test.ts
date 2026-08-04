@@ -75,8 +75,8 @@ function insertRule(
   input: {
     name: string;
     priority: number;
-    action: "accept" | "reject";
-    field?: "title" | "description" | "channel" | "duration";
+    action: "accept" | "reject" | "review";
+    field?: "title" | "description" | "channel" | "duration" | "content_type";
     operator?:
       | "contains"
       | "not_contains"
@@ -105,7 +105,7 @@ function insertRule(
       input.operator ?? "contains",
       input.value,
       JSON.stringify(
-        input.action === "accept"
+        input.action !== "reject"
           ? (input.playlistIds ?? ["playlist-one"])
           : [],
       ),
@@ -189,6 +189,32 @@ describe("rule evaluation", () => {
       outcome: "accept",
       ruleId: 3,
       playlistIds: ["playlist-four"],
+    });
+  });
+
+  it("marks a matching review rule for review with its destinations", () => {
+    const video = candidate("video-review", "A short upload");
+    video.durationSeconds = 2 * 60;
+    const result = evaluateRules(
+      [
+        {
+          id: 5,
+          name: "Review videos under three minutes",
+          action: "review",
+          field: "duration",
+          operator: "less_than",
+          value: "3",
+          playlistIds: ["playlist-two"],
+        },
+      ],
+      "reject",
+      video,
+    );
+    expect(result).toMatchObject({
+      outcome: "accept",
+      requiresReview: true,
+      ruleId: 5,
+      playlistIds: ["playlist-two"],
     });
   });
 
@@ -422,6 +448,47 @@ describe("video worker", () => {
           .get("review-me") as { decision: string }
       ).decision,
     ).toBe("accepted");
+  });
+
+  it("queues a review rule even when global processing is automatic", async () => {
+    const database = testDatabase();
+    configureSources(database);
+    setSetting(database, "processing_mode", "auto");
+    insertRule(database, {
+      name: "Review videos under three minutes",
+      priority: 10,
+      action: "review",
+      field: "duration",
+      operator: "less_than",
+      value: "3",
+      playlistIds: ["playlist-two"],
+    });
+    const shortVideo = candidate("short-review", "A short upload");
+    shortVideo.durationSeconds = 2 * 60;
+    const added: string[] = [];
+    const youtube = fakeYouTube({
+      videos: [shortVideo],
+      add: async (videoId, playlistId) => {
+        added.push(`${videoId}:${playlistId}`);
+      },
+    });
+    const worker = new VideoWorker(
+      database,
+      () => youtube,
+      () => new Date("2026-07-31T03:00:00.000Z"),
+    );
+
+    const run = await worker.runOnce();
+    expect(run.stats).toMatchObject({ queuedForReview: 1, added: 0 });
+    expect(added).toEqual([]);
+    expect(
+      database
+        .prepare("SELECT decision FROM videos WHERE video_id = ?")
+        .get("short-review"),
+    ).toEqual({ decision: "pending" });
+
+    await worker.approve("short-review");
+    expect(added).toEqual(["short-review:playlist-two"]);
   });
 
   it("records failed additions and retries them safely", async () => {

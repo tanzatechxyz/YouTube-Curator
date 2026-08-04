@@ -24,7 +24,7 @@ export interface VideoCandidate {
 export interface FilterRule {
   id: number;
   name: string;
-  action: "accept" | "reject";
+  action: "accept" | "reject" | "review";
   field: RuleField;
   operator: RuleOperator;
   value: string;
@@ -33,6 +33,7 @@ export interface FilterRule {
 
 export interface FilterDecision {
   outcome: "accept" | "reject";
+  requiresReview: boolean;
   reason: string;
   playlistIds: string[];
   ruleId?: number;
@@ -245,15 +246,17 @@ export function evaluateRules(
   for (const rule of rules) {
     if (matches(rule, video)) {
       return {
-        outcome: rule.action,
+        outcome: rule.action === "reject" ? "reject" : "accept",
+        requiresReview: rule.action === "review",
         reason: describe(rule),
-        playlistIds: rule.action === "accept" ? rule.playlistIds : [],
+        playlistIds: rule.action === "reject" ? [] : rule.playlistIds,
         ruleId: rule.id,
       };
     }
   }
   return {
     outcome: defaultOutcome,
+    requiresReview: false,
     reason: `No rule matched; default outcome is ${defaultOutcome}`,
     playlistIds: defaultOutcome === "accept" ? defaultPlaylistIds : [],
   };

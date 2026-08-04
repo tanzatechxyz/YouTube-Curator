@@ -2,9 +2,9 @@
 <%- include("partials/header") %>
 <div class="page-heading">
   <div>
-    <p class="eyebrow">Manual mode</p>
+    <p class="eyebrow">Pending decisions</p>
     <h1>Review queue</h1>
-    <p>Approve matching videos before the app changes your playlists.</p>
+    <p>Approve videos sent here by a rule or by manual-review mode.</p>
   </div>
   <span class="status-pill <%= videos.length ? 'warning' : 'good' %>">
     <span class="status-dot"></span>
@@ -12,10 +12,40 @@
   </span>
 </div>
 
+<% if (videos.length) { %>
+  <section class="panel bulk-review-panel" aria-label="Bulk review actions">
+    <form id="bulk-review-form" method="post" action="/review/bulk" class="bulk-review-form" data-bulk-review>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label class="bulk-review-select">
+        <input type="checkbox" data-review-select-all>
+        <span>Select all shown</span>
+        <span class="muted-copy">(<span data-review-selected-count>0</span> selected)</span>
+      </label>
+      <div class="bulk-review-actions">
+        <button class="button primary" type="submit" name="operation" value="approve_selected">Approve all selected</button>
+        <button class="button secondary" type="submit" name="operation" value="reject_selected">Reject all selected</button>
+        <button class="button primary" type="submit" name="operation" value="approve_all">Approve all</button>
+        <button class="button danger" type="submit" name="operation" value="reject_all">Reject all</button>
+      </div>
+      <p class="bulk-review-note">Bulk actions apply to the <%= videos.length %> items currently shown. Approvals can use YouTube API quota.</p>
+    </form>
+  </section>
+<% } %>
+
 <section class="review-list" aria-label="Videos awaiting review">
   <% if (videos.length) { %>
     <% videos.forEach((video) => { %>
       <article class="review-card">
+        <label class="review-select">
+          <input
+            type="checkbox"
+            name="videoIds"
+            value="<%= video.video_id %>"
+            form="bulk-review-form"
+            data-review-item
+          >
+          <span class="sr-only">Select <%= video.title %></span>
+        </label>
         <a class="video-thumbnail" href="https://www.youtube.com/watch?v=<%= video.video_id %>" target="_blank" rel="noreferrer">
           <% if (video.thumbnail_url) { %>
             <img src="<%= video.thumbnail_url %>" alt="">
@@ -67,8 +97,9 @@
     <div class="panel empty-state">
       <div class="empty-icon" aria-hidden="true">✓</div>
       <h2>Queue clear</h2>
-      <p>New videos accepted by your rules will appear here in manual-review mode.</p>
+      <p>New videos sent to review by a rule or manual-review mode will appear here.</p>
     </div>
   <% } %>
 </section>
+<script src="/assets/review.js" defer></script>
 <%- include("partials/footer") %>

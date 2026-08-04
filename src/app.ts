@@ -656,7 +656,7 @@ export function createApp(dependencies: AppDependencies): Express {
   ):
     | {
         name: string;
-        action: "accept" | "reject";
+        action: "accept" | "reject" | "review";
         field: RuleField;
         operator: RuleOperator;
         value: string;
@@ -671,7 +671,7 @@ export function createApp(dependencies: AppDependencies): Express {
     if (!name || name.length > 80) {
       return "Give the rule a name of 80 characters or fewer.";
     }
-    if (!["accept", "reject"].includes(action)) {
+    if (!["accept", "reject", "review"].includes(action)) {
       return "Choose a valid rule action.";
     }
     const fieldDefinition = getRuleField(field);
@@ -742,16 +742,16 @@ export function createApp(dependencies: AppDependencies): Express {
         textArray(body.playlistIds).filter((id) => validPlaylistIds.has(id)),
       ),
     ];
-    if (action === "accept" && playlistIds.length === 0) {
-      return "Choose at least one destination playlist for an accepting rule.";
+    if (action !== "reject" && playlistIds.length === 0) {
+      return "Choose at least one destination playlist for an add or review rule.";
     }
     return {
       name,
-      action: action as "accept" | "reject",
+      action: action as "accept" | "reject" | "review",
       field: field as RuleField,
       operator: operatorDefinition.key as RuleOperator,
       value,
-      playlistIds: action === "accept" ? playlistIds : [],
+      playlistIds: action === "reject" ? [] : playlistIds,
     };
   };
 
@@ -1067,6 +1067,108 @@ export function createApp(dependencies: AppDependencies): Express {
         destinations: destinations.all(video.video_id),
       })),
     });
+  });
+
+  app.post("/review/bulk", async (request, response) => {
+    if (!worker) {
+      redirectWith(response, "/review", "error", "The background worker is unavailable.");
+      return;
+    }
+    const operation = text(request.body.operation);
+    const validOperations = new Set([
+      "approve_selected",
+      "reject_selected",
+      "approve_all",
+      "reject_all",
+    ]);
+    if (!validOperations.has(operation)) {
+      redirectWith(response, "/review", "error", "Choose a valid bulk review action.");
+      return;
+    }
+
+    const selectedVideoIds = [
+      ...new Set(textArray(request.body.videoIds)),
+    ].slice(0, 100);
+    const allVideoIds = () =>
+      (
+        database
+          .prepare(
+            `SELECT video_id
+             FROM videos
+             WHERE decision = 'pending'
+             ORDER BY published_at DESC, detected_at DESC
+             LIMIT 100`,
+          )
+          .all() as Array<{ video_id: string }>
+      ).map((row) => row.video_id);
+    const videoIds = operation.endsWith("_all")
+      ? allVideoIds()
+      : selectedVideoIds;
+    if (videoIds.length === 0) {
+      redirectWith(
+        response,
+        "/review",
+        "error",
+        operation.endsWith("_all")
+          ? "There are no videos waiting for review."
+          : "Select at least one review item.",
+      );
+      return;
+    }
+
+    if (operation.startsWith("approve")) {
+      let approved = 0;
+      let added = 0;
+      let failedAdditions = 0;
+      let skipped = 0;
+      for (const videoId of videoIds) {
+        try {
+          const result = await worker.approve(videoId);
+          approved += 1;
+          added += result.added;
+          failedAdditions += result.failed;
+        } catch {
+          skipped += 1;
+        }
+      }
+      const details = [
+        `${approved} video${approved === 1 ? "" : "s"} approved`,
+        `${added} playlist addition${added === 1 ? "" : "s"} succeeded`,
+      ];
+      if (failedAdditions) {
+        details.push(`${failedAdditions} playlist addition${failedAdditions === 1 ? "" : "s"} failed`);
+      }
+      if (skipped) {
+        details.push(`${skipped} item${skipped === 1 ? "" : "s"} skipped because it was no longer pending`);
+      }
+      redirectWith(
+        response,
+        "/review",
+        failedAdditions || skipped ? "error" : "notice",
+        details.join("; "),
+      );
+      return;
+    }
+
+    let rejected = 0;
+    let skipped = 0;
+    for (const videoId of videoIds) {
+      try {
+        worker.reject(videoId);
+        rejected += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+    const message = skipped
+      ? `${rejected} video${rejected === 1 ? "" : "s"} rejected; ${skipped} item${skipped === 1 ? "" : "s"} skipped because it was no longer pending`
+      : `${rejected} video${rejected === 1 ? "" : "s"} rejected`;
+    redirectWith(
+      response,
+      "/review",
+      skipped ? "error" : "notice",
+      message,
+    );
   });
 
   app.post("/review/:videoId/approve", async (request, response) => {

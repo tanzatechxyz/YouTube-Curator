@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 
-export const APP_VERSION = "1.3.1";
+export const APP_VERSION = "1.4.0";
 
 export interface AppConfig {
   dataDirectory: string;

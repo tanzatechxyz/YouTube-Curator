@@ -21,7 +21,7 @@ function migrate(database: AppDatabase): void {
   let currentVersion = database.pragma("user_version", {
     simple: true,
   }) as number;
-  if (currentVersion > 3) {
+  if (currentVersion > 4) {
     throw new Error(
       `Database schema ${currentVersion} is newer than this application supports.`,
     );
@@ -62,7 +62,7 @@ function migrate(database: AppDatabase): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       priority INTEGER NOT NULL,
-      action TEXT NOT NULL CHECK (action IN ('accept', 'reject')),
+      action TEXT NOT NULL CHECK (action IN ('accept', 'reject', 'review')),
       field TEXT NOT NULL,
       operator TEXT NOT NULL,
       value TEXT NOT NULL,
@@ -119,7 +119,7 @@ function migrate(database: AppDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS job_runs_started_at_idx ON job_runs(started_at DESC);
   `);
-    database.pragma("user_version = 3");
+    database.pragma("user_version = 4");
     return;
   }
 
@@ -220,6 +220,40 @@ function migrate(database: AppDatabase): void {
         CREATE UNIQUE INDEX rules_priority_unique ON rules(priority);
       `);
       database.pragma("user_version = 3");
+    })();
+    currentVersion = 3;
+  }
+
+  if (currentVersion === 3) {
+    database.transaction(() => {
+      database.exec(`
+        CREATE TABLE rules_v4 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          priority INTEGER NOT NULL,
+          action TEXT NOT NULL CHECK (action IN ('accept', 'reject', 'review')),
+          field TEXT NOT NULL,
+          operator TEXT NOT NULL,
+          value TEXT NOT NULL,
+          playlist_ids_json TEXT NOT NULL DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO rules_v4 (
+          id, name, priority, action, field, operator, value,
+          playlist_ids_json, enabled, created_at, updated_at
+        )
+        SELECT id, name, priority, action, field, operator, value,
+               playlist_ids_json, enabled, created_at, updated_at
+        FROM rules;
+
+        DROP TABLE rules;
+        ALTER TABLE rules_v4 RENAME TO rules;
+        CREATE UNIQUE INDEX rules_priority_unique ON rules(priority);
+      `);
+      database.pragma("user_version = 4");
     })();
   }
 }

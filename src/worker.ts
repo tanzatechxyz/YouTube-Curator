@@ -268,7 +268,7 @@ export class VideoWorker {
     const decision =
       filter.outcome === "reject"
         ? "rejected"
-        : reviewMode
+        : filter.requiresReview || reviewMode
           ? "pending"
           : "accepted";
     const detectedAt = this.now().toISOString();

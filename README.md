@@ -11,7 +11,7 @@ configuration is performed in the browser.
 
 - Google OAuth connection for one YouTube account
 - Subscription and owned-playlist sync
-- Ordered, first-match routing/reject rules with per-rule playlists
+- Ordered, first-match add/review/reject rules with per-rule playlists
 - Type-aware filtering across 50+ video metadata fields, including channel,
   text, tags, duration, counts, captions, status, dates, topics, and live data
 - A simple content-type rule for routing Short candidates separately from
@@ -19,7 +19,8 @@ configuration is performed in the browser.
 - One-click private `Watch Later (Curator)` destination for automated routing
 - Automatic or manual-review processing
 - Idempotent video processing and playlist additions
-- Review queue and searchable processing history
+- Review queue with selection and bulk decisions, plus searchable processing
+  history
 - Run-now control, worker schedule, recent runs, and visible errors
 - Single-owner password, CSRF protection, encrypted OAuth secrets, and
   non-root container execution
@@ -116,13 +117,17 @@ Official references:
    one-click private **Watch Later (Curator)** substitute if you want that
    workflow.
 4. Open **Rules**. Rules are evaluated top to bottom; the first match wins.
-   Each accepting rule chooses its own destination playlists. For example,
+   Each add or review rule chooses its own destination playlists. For example,
    route videos from one channel to a channel-specific playlist, or route
    videos at least 20 minutes long to a long-form playlist. The field selector
    is grouped by metadata type and shows only valid comparisons and values.
    To separate short-form uploads, choose **Content type**, **equals**, then
    either **Short candidate (3 minutes or less)** or
    **Standard video (more than 3 minutes)**.
+   To review videos under three minutes while adding other matches
+   automatically, create a high-priority rule with **Send to review**,
+   **Duration**, **is less than**, and `3`, then choose its destination
+   playlist. Keep global processing mode set to **Automatic**.
 5. Use **Run scan now** from the dashboard.
 
 YouTube classifies current Shorts using both duration and a square or vertical
@@ -195,7 +200,7 @@ docker compose up -d
 The workflow in `.github/workflows/container.yml` runs the tests and type
 checks, builds the production Docker target, publishes the image to GitHub
 Container Registry, and starts the published digest for a health smoke test.
-It runs on pushes to `main`, version tags such as `v1.3.1`, and manual
+It runs on pushes to `main`, version tags such as `v1.4.0`, and manual
 dispatches. Pull requests perform the same verification and image build
 without publishing.
 

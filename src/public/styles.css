@@ -900,6 +900,11 @@ select:focus {
   background: var(--red-soft);
 }
 
+.decision-badge.review {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
 .icon-button {
   display: grid;
   width: 32px;
@@ -1106,14 +1111,49 @@ select:focus {
   gap: 14px;
 }
 
+.bulk-review-panel {
+  margin-bottom: 14px;
+}
+
+.bulk-review-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bulk-review-select,
+.bulk-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulk-review-select input,
+.review-select input {
+  width: 20px;
+  min-height: 20px;
+}
+
+.bulk-review-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .review-card {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) auto;
+  grid-template-columns: auto 220px minmax(0, 1fr) auto;
   gap: 20px;
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 13px;
   background: white;
+}
+
+.review-select {
+  display: grid;
+  align-content: start;
+  padding-top: 2px;
 }
 
 .video-thumbnail,
@@ -1378,11 +1418,11 @@ select:focus {
   }
 
   .review-card {
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-columns: auto 180px minmax(0, 1fr);
   }
 
   .review-actions {
-    grid-column: 2;
+    grid-column: 3;
     display: flex;
   }
 
@@ -1505,6 +1545,10 @@ select:focus {
   .history-row,
   .history-filters {
     grid-template-columns: 1fr;
+  }
+
+  .review-select {
+    justify-content: end;
   }
 
   .review-actions,

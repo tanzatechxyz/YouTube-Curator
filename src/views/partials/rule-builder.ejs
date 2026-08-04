@@ -14,7 +14,8 @@
 <label>
   Action
   <select name="action" data-rule-action>
-    <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Add to playlist(s)</option>
+    <option value="accept" <%= rule.action === "accept" ? "selected" : "" %>>Add automatically</option>
+    <option value="review" <%= rule.action === "review" ? "selected" : "" %>>Send to review</option>
     <option value="reject" <%= rule.action === "reject" ? "selected" : "" %>>Reject</option>
   </select>
 </label>
@@ -91,9 +92,9 @@
         </label>
       <% }) %>
     </div>
-    <small>Choose one or more playlists for an accepting rule.</small>
+    <small>Choose one or more playlists for an add or review rule.</small>
   <% } else { %>
-    <p class="muted-copy">Sync or create a playlist before saving an accepting rule. <a class="text-link" href="/playlists">Open playlists →</a></p>
+    <p class="muted-copy">Sync or create a playlist before saving an add or review rule. <a class="text-link" href="/playlists">Open playlists →</a></p>
   <% } %>
 </fieldset>
 <button class="button primary" type="submit"><%= submitLabel %></button>

@@ -20,7 +20,7 @@ or second worker service.
 | `settings` | Key/value application configuration, encrypted client secret, generated session secret, mode, fallback playlist/catalog JSON |
 | `youtube_account` | Singleton connected channel identity and encrypted access/refresh tokens |
 | `subscriptions` | Channel ID, uploads-playlist ID, enabled/current flags, last published-video watermark |
-| `rules` | Ordered action, field, operator, value, per-rule playlist IDs, and enabled state |
+| `rules` | Ordered add/review/reject action, field, operator, value, per-rule playlist IDs, and enabled state |
 | `videos` | Unique YouTube video ID, core display fields, duration, normalized metadata JSON snapshot, filter outcome, final decision, reason, timestamps |
 | `playlist_additions` | Unique `(video_id, playlist_id)`, pending/added/failed status and error |
 | `job_runs` | Worker start/finish, success/failure, counters, and error summary |
@@ -38,9 +38,10 @@ including after crashes or retries.
 4. Batch-fetch public/filterable metadata for newly discovered video IDs and
    normalize scalar/list values into one snapshot.
 5. Insert each unseen video once.
-6. Evaluate enabled rules in priority order; the first match wins and supplies
-   that video’s playlist targets.
-7. Reject immediately, queue for manual review, or accept automatically.
+6. Evaluate enabled rules in priority order; the first match wins, supplies
+   that video’s playlist targets, and chooses add, review, or reject.
+7. Reject immediately, queue when the rule requests review (or global review
+   mode is active), or accept automatically.
 8. Create one pending addition row for each playlist on the matched rule so a
    later manual review keeps the original routing decision.
 9. Check the target playlist for the video, call `playlistItems.insert` only
@@ -63,7 +64,7 @@ preserved.
 | Subscription sync and enablement | `/subscriptions` |
 | Type-aware, ordered metadata filter rules | `/rules` |
 | Playlist targets, Watch Later substitute, and processing mode | `/playlists` |
-| Manual review queue | `/review` |
+| Review queue with selected/all bulk decisions | `/review` |
 | Searchable processing/addition history | `/history` |
 | Worker schedule, password, runs, and errors | `/settings` |
 

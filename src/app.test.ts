@@ -7,11 +7,14 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { getSetting, openDatabase, type AppDatabase } from "./db.js";
 import { loadOrCreateMasterKey, SecretBox } from "./security.js";
-import { savePlaylistCatalog } from "./youtube.js";
+import { VideoWorker } from "./worker.js";
+import { savePlaylistCatalog, type WorkerYouTube } from "./youtube.js";
 
 const cleanups: Array<() => void> = [];
 
-function testApplication(): {
+function testApplication(options: {
+  createWorker?: (database: AppDatabase) => VideoWorker;
+} = {}): {
   app: ReturnType<typeof createApp>;
   database: AppDatabase;
 } {
@@ -27,6 +30,7 @@ function testApplication(): {
     app: createApp({
       database,
       secretBox,
+      worker: options.createWorker?.(database),
       config: loadConfig({
         dataDirectory,
         viewsDirectory: path.resolve("src/views"),
@@ -314,6 +318,33 @@ describe("first-run application", () => {
         value: "",
       },
     ]);
+
+    await agent.post("/rules").type("form").send({
+      _csrf: csrf,
+      name: "Review videos under three minutes",
+      action: "review",
+      field: "duration",
+      operator: "less_than",
+      value: "3",
+      playlistIds: "PL-highlights",
+    });
+    expect(
+      database
+        .prepare(
+          `SELECT action, field, operator, value, playlist_ids_json
+           FROM rules WHERE name = 'Review videos under three minutes'`,
+        )
+        .get(),
+    ).toEqual({
+      action: "review",
+      field: "duration",
+      operator: "less_than",
+      value: "3",
+      playlist_ids_json: '["PL-highlights"]',
+    });
+    const reviewRulePage = await agent.get("/rules");
+    expect(reviewRulePage.text).toContain("Send to review");
+    expect(reviewRulePage.text).toContain("Review videos under three minutes");
   });
 
   it("updates the fallback outcome without treating default as a rule ID", async () => {
@@ -433,12 +464,101 @@ describe("first-run application", () => {
     expect(reviewPage.text).toContain("Research");
     expect(reviewPage.text).toContain("12:34");
     expect(reviewPage.text).toContain("Standard video");
+    expect(reviewPage.text).toContain("Approve all selected");
+    expect(reviewPage.text).toContain("Reject all selected");
+    expect(reviewPage.text).toContain("Approve all");
+    expect(reviewPage.text).toContain("Reject all");
+    expect(reviewPage.text).toContain('name="videoIds"');
 
     const historyPage = await agent.get("/history");
     expect(historyPage.status).toBe(200);
     expect(historyPage.text).toContain("A useful upload");
     expect(historyPage.text).toContain("pending");
     expect(historyPage.text).toContain("Standard video");
+  });
+
+  it("approves selected review items and rejects all remaining items", async () => {
+    const additions: string[] = [];
+    const youtube: WorkerYouTube = {
+      syncSubscriptions: async () => ({ synced: 0, skipped: 0 }),
+      syncPlaylists: async () => ({ synced: 0 }),
+      listUploadVideos: async () => [],
+      addVideoToPlaylist: async (videoId, playlistId) => {
+        additions.push(`${videoId}:${playlistId}`);
+      },
+    };
+    const { app, database } = testApplication({
+      createWorker: (workerDatabase) =>
+        new VideoWorker(
+          workerDatabase,
+          () => youtube,
+          () => new Date("2026-08-05T01:00:00.000Z"),
+        ),
+    });
+    const agent = request.agent(app);
+    await agent.post("/setup").type("form").send({
+      password: "correct horse",
+      publicUrl: "http://localhost:3000",
+      googleClientId: "",
+      googleClientSecret: "",
+    });
+    const insertVideo = database.prepare(
+      `INSERT INTO videos (
+         video_id, channel_id, channel_title, title, description,
+         published_at, detected_at, filter_outcome, decision, decision_reason
+       ) VALUES (?, 'channel-one', 'Useful Channel', ?, '', ?, ?,
+                 'accept', 'pending', 'Rule sent this video to review')`,
+    );
+    insertVideo.run(
+      "review-one",
+      "First review item",
+      "2026-08-05T00:00:00.000Z",
+      "2026-08-05T00:10:00.000Z",
+    );
+    insertVideo.run(
+      "review-two",
+      "Second review item",
+      "2026-08-05T00:01:00.000Z",
+      "2026-08-05T00:11:00.000Z",
+    );
+    database
+      .prepare(
+        `INSERT INTO playlist_additions (
+           video_id, playlist_id, playlist_title, status
+         ) VALUES (?, 'playlist-two', 'Research', 'pending')`,
+      )
+      .run("review-one");
+
+    const reviewPage = await agent.get("/review");
+    const csrf = reviewPage.text.match(/name="_csrf" value="([^"]+)"/)?.[1];
+    const approve = await agent.post("/review/bulk").type("form").send({
+      _csrf: csrf,
+      operation: "approve_selected",
+      videoIds: "review-one",
+    });
+    expect(approve.status).toBe(302);
+    expect(
+      database
+        .prepare("SELECT decision FROM videos WHERE video_id = ?")
+        .get("review-one"),
+    ).toEqual({ decision: "accepted" });
+    expect(
+      database
+        .prepare("SELECT decision FROM videos WHERE video_id = ?")
+        .get("review-two"),
+    ).toEqual({ decision: "pending" });
+    expect(additions).toEqual(["review-one:playlist-two"]);
+
+    const reject = await agent.post("/review/bulk").type("form").send({
+      _csrf: csrf,
+      operation: "reject_all",
+    });
+    expect(reject.status).toBe(302);
+    expect(
+      database
+        .prepare("SELECT decision FROM videos WHERE video_id = ?")
+        .get("review-two"),
+    ).toEqual({ decision: "rejected" });
   });
 
   it("updates worker settings and the owner password through the GUI", async () => {

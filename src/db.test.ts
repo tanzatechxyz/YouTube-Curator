@@ -69,7 +69,7 @@ describe("database migrations", () => {
       rmSync(directory, { recursive: true, force: true });
     });
 
-    expect(migrated.pragma("user_version", { simple: true })).toBe(3);
+    expect(migrated.pragma("user_version", { simple: true })).toBe(4);
     expect(
       migrated
         .prepare(
@@ -106,5 +106,27 @@ describe("database migrations", () => {
           .get() as { count: number }
       ).count,
     ).toBe(1);
+
+    expect(() =>
+      migrated
+        .prepare(
+          `INSERT INTO rules (
+             name, priority, action, field, operator, value,
+             playlist_ids_json, enabled, created_at, updated_at
+           ) VALUES (?, ?, 'review', 'duration', 'at_most', '3', ?, 1, ?, ?)`,
+        )
+        .run(
+          "Review short uploads",
+          30,
+          '["playlist-one"]',
+          "now",
+          "now",
+        ),
+    ).not.toThrow();
+    expect(
+      migrated
+        .prepare("SELECT action FROM rules WHERE name = ?")
+        .get("Review short uploads"),
+    ).toEqual({ action: "review" });
   });
 });

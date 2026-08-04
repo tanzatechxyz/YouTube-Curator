@@ -4,7 +4,7 @@
   <div>
     <p class="eyebrow">Filtering</p>
     <h1>Rules</h1>
-    <p>The first enabled rule that matches decides whether to reject the video or which playlists receive it.</p>
+    <p>The first enabled rule that matches decides whether to add, review, or reject the video.</p>
   </div>
 </div>
 
@@ -64,7 +64,7 @@
           <div class="rule-copy">
             <div class="rule-title">
               <h3><%= rule.name %></h3>
-              <span class="decision-badge <%= rule.action %>"><%= rule.action === "accept" ? "route" : "reject" %></span>
+              <span class="decision-badge <%= rule.action %>"><%= rule.action === "accept" ? "add" : rule.action === "review" ? "review" : "reject" %></span>
               <% if (!rule.enabled) { %><span class="status-pill muted">Disabled</span><% } %>
             </div>
             <p>
@@ -74,7 +74,7 @@
                 <code><%= rule.displayValue %><%= rule.unit ? ` ${rule.unit}` : "" %></code>
               <% } %>
             </p>
-            <% if (rule.action === "accept") { %>
+            <% if (rule.action !== "reject") { %>
               <div class="rule-targets">
                 <span>→</span>
                 <% if (rule.playlistTitles.length) { %>
