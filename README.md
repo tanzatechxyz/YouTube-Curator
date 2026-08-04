@@ -128,6 +128,8 @@ Official references:
    automatically, create a high-priority rule with **Send to review**,
    **Duration**, **is less than**, and `3`, then choose its destination
    playlist. Keep global processing mode set to **Automatic**.
+   In **Review queue**, tick individual items or select all shown, then approve
+   or reject the selected items—or the full displayed batch—in one action.
 5. Use **Run scan now** from the dashboard.
 
 YouTube classifies current Shorts using both duration and a square or vertical
